@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { analyseIssue, analyseIssueWithProvider, duplicateScore, escalatedPriority, type IssueAnalysis } from "@/lib/issue-analysis";
+import { analyseIssue, duplicateScore, escalatedPriority, type IssueAnalysis } from "@/lib/issue-analysis";
 
 type ComplaintWithUser = Prisma.ComplaintGetPayload<{ include: { user: { select: { name: true } } } }>;
 
@@ -61,14 +61,8 @@ export async function POST(request: Request) {
     if (!validImage(image)) return NextResponse.json({ error: "Evidence must be a supported image smaller than 8 MB." }, { status: 400 });
 
     const fallback = analyseIssue({ title, description, location, image });
-    let providerAnalysis = fallback;
-    try {
-      providerAnalysis = (await analyseIssueWithProvider({ title, description, location, image }, fallback)).result;
-    } catch (error) {
-      console.error("Provider analysis unavailable; using local triage.", error);
-    }
     const analysis: IssueAnalysis = {
-      ...providerAnalysis,
+      ...fallback,
     };
 
     const activeComplaints = await prisma.complaint.findMany({ where: { campusName: session.campusName, status: { not: "Resolved" }, masterId: null }, orderBy: { createdAt: "desc" }, take: 250 });

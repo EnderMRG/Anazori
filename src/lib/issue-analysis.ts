@@ -79,7 +79,7 @@ export function analyseIssue({ title, description, location, image }: AnalysisIn
 export async function analyseIssueWithProvider(input: AnalysisInput, fallback = analyseIssue(input)) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return { result: fallback, provider: "local" };
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
   const parts: Array<Record<string, unknown>> = [{ text: `Analyse this campus grievance. Return only JSON with category, department, priority (Critical|High|Medium|Low), language (en|as|mixed), tags (2-4 hashtag strings), summaryEn, summaryAs, justification, and confidence (0-1). Preserve concrete details from the report in both summaries. Do not invent facts.\nTitle: ${input.title}\nDescription: ${input.description}\nLocation: ${input.location}` }];
   if (input.image?.startsWith("data:")) {
     const match = input.image.match(/^data:([^;]+);base64,(.+)$/);

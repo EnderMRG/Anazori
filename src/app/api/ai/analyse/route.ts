@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { analyseIssue, analyseIssueWithProvider, type IssueAnalysis } from "@/lib/issue-analysis";
 
 export const runtime = "nodejs";
+
+const cache = new Map<string, { expires: number; result: IssueAnalysis }>();
+let windowStarted = Date.now();
+let windowRequests = 0;
+
+function requestKey(input: { title: string; description: string; location: string; image?: string }) {
+  return createHash("sha256").update(`${input.title}\n${input.description}\n${input.location}\n${input.image || ""}`).digest("hex");
+}
 
 function parseModelResult(value: unknown, fallback: IssueAnalysis): IssueAnalysis {
   if (!value || typeof value !== "object") return fallback;
@@ -28,9 +37,19 @@ export async function POST(request: Request) {
     const input = { title: String(body.title || "").trim(), description: String(body.description || "").trim(), location: String(body.location || "").trim(), image: typeof body.image === "string" ? body.image : undefined };
     if (!input.title || !input.description || !input.location) return NextResponse.json({ error: "Title, description and location are required." }, { status: 400 });
     const fallback = analyseIssue(input);
+    const key = requestKey(input);
+    const cached = cache.get(key);
+    if (cached && cached.expires > Date.now()) return NextResponse.json({ ...cached.result, model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite", provider: "cache" });
+    if (Date.now() - windowStarted >= 60_000) { windowStarted = Date.now(); windowRequests = 0; }
+    const maxRequests = Math.max(1, Number(process.env.GEMINI_REQUESTS_PER_MINUTE || 8));
+    if (process.env.GEMINI_API_KEY && windowRequests >= maxRequests) return NextResponse.json({ ...fallback, model: "CivicSense local triage", provider: "rate-limited-fallback", warning: "Gemini request limit reached; local triage was used." });
     try {
+      if (process.env.GEMINI_API_KEY) windowRequests += 1;
       const result = await analyseIssueWithProvider(input, fallback);
-      return NextResponse.json({ ...result.result, model: result.provider === "gemini" ? process.env.GEMINI_MODEL || "gemini-2.0-flash" : "CivicSense local triage", provider: result.provider });
+      if (result.provider === "gemini") {
+        cache.set(key, { expires: Date.now() + 10 * 60_000, result: result.result });
+        return NextResponse.json({ ...result.result, model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite", provider: "gemini" });
+      }
     } catch (error) {
       console.error("Gemini analysis unavailable; using local triage.", error);
     }

@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const before = imagePart(body.before);
     const after = imagePart(body.after);
     if (!before || !after) return NextResponse.json({ error: "The evidence images must each be smaller than 8 MB." }, { status: 400 });
-    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: `Compare the before and after campus evidence images. Return only JSON with verified (boolean), sameScene (boolean), issueAddressed (boolean), and message (short explanation). The original issue was: ${body.description || "campus issue"}. Reject unrelated images, different scenes, or an unresolved issue.` }, before, after] }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }) });
     if (!response.ok) throw new Error(`Gemini verification failed with ${response.status}`);
     const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
