@@ -223,6 +223,7 @@ export default function CivicSenseApp() {
   const [authMode, setAuthMode] = useState<"signin" | "signup">(pathname === "/auth/signup" ? "signup" : "signin");
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authResolved, setAuthResolved] = useState(false);
+  const [isStandalonePwa, setIsStandalonePwa] = useState<boolean | null>(null);
   const [availableCampuses, setAvailableCampuses] = useState<Campus[]>([]);
   const [selectedCampus, setSelectedCampus] = useState<Campus | null>(null);
   const [showCampusPicker, setShowCampusPicker] = useState(false);
@@ -263,6 +264,11 @@ export default function CivicSenseApp() {
   }, []);
 
   useEffect(() => {
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+    setIsStandalonePwa(standalone);
+  }, []);
+
+  useEffect(() => {
     if (isAuthRoute) setAuthMode(pathname === "/auth/signup" ? "signup" : "signin");
     if (isAdminRoute) setView("admin");
     if (isDashboardRoute && currentUser?.role !== "admin") setView("overview");
@@ -270,6 +276,10 @@ export default function CivicSenseApp() {
 
   useEffect(() => {
     if (!authResolved) return;
+    if (isLandingRoute && isStandalonePwa) {
+      router.replace(currentUser ? (currentUser.role === "admin" ? "/admin" : "/dashboard") : "/auth/signin");
+      return;
+    }
     if (isProtectedRoute && !currentUser) {
       router.replace("/auth/signin");
       return;
@@ -286,7 +296,7 @@ export default function CivicSenseApp() {
       router.replace("/admin");
       return;
     }
-  }, [authResolved, currentUser, isAdminRoute, isAuthRoute, isDashboardRoute, isProtectedRoute, router]);
+  }, [authResolved, currentUser, isAdminRoute, isAuthRoute, isDashboardRoute, isLandingRoute, isProtectedRoute, isStandalonePwa, router]);
 
   useEffect(() => {
     if (!isProtectedRoute || !currentUser) return;
@@ -420,6 +430,7 @@ export default function CivicSenseApp() {
   }
 
   if (isLandingRoute) {
+    if (isStandalonePwa === null || (isStandalonePwa && (!authResolved || !currentUser))) return <div className="route-loading"><Loader2 size={22} className="spin" /><span>Opening your CivicSense workspace...</span></div>;
     return <LandingPage language={language} onLanguageChange={() => setLanguage(language === "en" ? "as" : "en")} onHome={() => router.replace("/")} onEnter={() => currentUser ? router.push(currentUser.role === "admin" ? "/admin" : "/dashboard") : openAuth("signin")} onSignUp={() => openAuth("signup")} />;
   }
 
@@ -468,6 +479,7 @@ export default function CivicSenseApp() {
         </button>
         <button className="sidebar-logout" onClick={signOut}><LogOut size={16} /><span>Log out</span></button>
       </aside>
+      {currentUser && isProtectedRoute && <MobileBottomNav isAdmin={isAdmin} view={view} counts={counts} onNavigate={navTo} labels={t} />}
 
       <main className="main-content">
         <header className="topbar">
@@ -596,6 +608,13 @@ function FeatureCard({ number, icon, title, text }: { number: string; icon: Reac
 
 function NavButton({ active, icon, label, count, onClick }: { active: boolean; icon: React.ReactNode; label: string; count?: number; onClick: () => void }) {
   return <button className={`nav-button ${active ? "nav-active" : ""}`} onClick={onClick}>{icon}<span>{label}</span>{count ? <em>{count}</em> : null}</button>;
+}
+
+function MobileBottomNav({ isAdmin, view, counts, onNavigate, labels }: { isAdmin: boolean; view: View; counts: { active: number; unread: number }; onNavigate: (view: View) => void; labels: typeof copy.en }) {
+  const items: Array<{ view: View; label: string; icon: React.ReactNode; count?: number }> = isAdmin
+    ? [{ view: "admin", label: "Admin", icon: <ShieldCheck size={18} />, count: counts.active }, { view: "settings", label: "Settings", icon: <Settings size={18} /> }]
+    : [{ view: "overview", label: labels.overview, icon: <LayoutDashboard size={18} /> }, { view: "complaints", label: labels.complaints, icon: <MessageSquareText size={18} />, count: counts.active }, { view: "analytics", label: labels.analytics, icon: <Lightbulb size={18} /> }, { view: "notifications", label: labels.notifications, icon: <Bell size={18} />, count: counts.unread }, { view: "settings", label: labels.settings, icon: <Settings size={18} /> }];
+  return <nav className={`mobile-bottom-nav ${isAdmin ? "mobile-bottom-admin" : ""}`} aria-label="Mobile navigation">{items.map((item) => <button key={item.view} className={view === item.view ? "mobile-bottom-active" : ""} onClick={() => onNavigate(item.view)} aria-label={item.label}>{item.icon}<span>{item.label}</span>{item.count ? <b>{item.count}</b> : null}</button>)}</nav>;
 }
 
 function Overview({ t, language, userName, campus, complaints, counts, onSubmit, onViewAll, onSelect }: { t: typeof copy.en; language: Language; userName: string; campus: Campus; complaints: Complaint[]; counts: { active: number; resolved: number; unread: number }; onSubmit: () => void; onViewAll: () => void; onSelect: (complaint: Complaint) => void }) {
