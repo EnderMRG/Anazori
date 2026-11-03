@@ -1,0 +1,28 @@
+{
+  "name": "CivicSense — Smart Campus Care",
+  "short_name": "CivicSense",
+  "description": "Report, track, and resolve campus issues in English or Assamese.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f8fb",
+  "theme_color": "#2b8f85",
+  "categories": ["education", "productivity", "social"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
