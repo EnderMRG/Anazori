@@ -49,3 +49,10 @@ Admin account for Dibrugarh University: `admin@dibrugarhuniversity.ac.in` / `Dib
 - The Neon schema stores users, campus ownership, and grievances. The additive setup script does not drop unrelated tables already present in the Neon database.
 
 The dashboard brand/name is clickable and returns to the landing page. The landing page provides separate sign-in and account-creation flows.
+
+## AI complaint workflows
+
+- Complaint intake asks a bilingual follow-up question when important report details appear to be missing.
+- Before submission, students can review possible duplicates, including Assamese-English matches, and explicitly choose whether to associate their report with an existing issue. Similarity suggestions never merge reports automatically.
+- Campus administrators can generate and edit English and Assamese response drafts, review suggested departments and next steps, then publish the response to affected reporters as a notification.
+- Configure `GEMINI_API_KEY` to enable Gemini-powered follow-up, cross-language matching, and response drafts. Local heuristics and bilingual templates are used when Gemini is unavailable.

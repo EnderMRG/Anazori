@@ -2,11 +2,20 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { analyseIssue, duplicateScore, escalatedPriority, improveBilingualSummaries, type IssueAnalysis } from "@/lib/issue-analysis";
+import { analyseIssue, escalatedPriority, improveBilingualSummaries, type IssueAnalysis } from "@/lib/issue-analysis";
 
-type ComplaintWithUser = Prisma.ComplaintGetPayload<{ include: { user: { select: { name: true } } } }>;
+type ComplaintWithUser = Prisma.ComplaintGetPayload<{ include: { user: { select: { name: true } } } }> & {
+  notifications?: Array<{ body: string }>;
+  master?: { notifications: Array<{ body: string }> } | null;
+};
+
+function publicResponse(body?: string) {
+  const match = body?.match(/^English response:\n([\s\S]*?)\n\nঅসমীয়া উত্তৰ:\n([\s\S]*)$/u);
+  return match ? { adminResponseEn: match[1], adminResponseAs: match[2] } : {};
+}
 
 function toClientComplaint(complaint: ComplaintWithUser) {
+  const response = publicResponse(complaint.notifications?.[0]?.body || complaint.master?.notifications[0]?.body);
   return {
     id: complaint.publicId,
     title: complaint.title,
@@ -20,6 +29,7 @@ function toClientComplaint(complaint: ComplaintWithUser) {
     image: complaint.imageUrl || undefined,
     resolvedImage: complaint.resolvedImageUrl || undefined,
     resolutionNotes: complaint.resolutionNotes || undefined,
+    ...response,
     tags: complaint.tags,
     upvotes: complaint.upvotes,
     masterId: complaint.masterId || undefined,
@@ -44,7 +54,16 @@ export async function GET(request: Request) {
   if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   const requestedCampus = new URL(request.url).searchParams.get("campusName");
   const campusName = session.role === "admin" ? (requestedCampus || session.campusName) : session.campusName;
-  const complaints = await prisma.complaint.findMany({ where: { campusName }, include: { user: { select: { name: true } } }, orderBy: { createdAt: "desc" } });
+  const responseNotification = {
+    where: { userId: session.id, title: { in: ["Campus administrator responded", "কেম্পাছ প্ৰশাসনৰ উত্তৰ"] } },
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+  };
+  const complaints = await prisma.complaint.findMany({
+    where: { campusName },
+    include: { user: { select: { name: true } }, notifications: responseNotification, master: { include: { notifications: responseNotification } } },
+    orderBy: { createdAt: "desc" },
+  });
   return NextResponse.json({ complaints: complaints.map(toClientComplaint), endpoints: { create: "POST /api/complaints", update: "PATCH /api/complaints/:id" } });
 }
 
@@ -73,9 +92,11 @@ export async function POST(request: Request) {
     };
     if (typeof body.summaryEn !== "string" || typeof body.summaryAs !== "string") analysis = await improveBilingualSummaries({ title, description, location, image }, analysis);
 
-    const activeComplaints = await prisma.complaint.findMany({ where: { campusName: session.campusName, status: { not: "Resolved" }, masterId: null }, orderBy: { createdAt: "desc" }, take: 250 });
-    const duplicate = activeComplaints.map((item) => ({ item, score: duplicateScore({ title, description, location, category: analysis.category, tags: analysis.tags }, item) })).sort((a, b) => b.score - a.score)[0];
-    const master = duplicate && duplicate.score >= 0.8 ? duplicate.item : null;
+    const duplicateOf = typeof body.duplicateOf === "string" ? body.duplicateOf.trim() : "";
+    const master = duplicateOf ? await prisma.complaint.findFirst({
+      where: { publicId: duplicateOf, campusName: session.campusName, status: { not: "Resolved" }, masterId: null },
+    }) : null;
+    if (duplicateOf && !master) return NextResponse.json({ error: "That suggested report is no longer open. Please check for similar reports again." }, { status: 409 });
     const complaint = await prisma.$transaction(async (tx) => {
       if (master) {
         const upvotes = master.upvotes + 1;

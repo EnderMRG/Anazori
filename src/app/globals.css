@@ -371,3 +371,29 @@ img, svg { max-width: 100%; }
   .mobile-bottom-nav { left: 6px; right: 6px; padding: 5px; border-radius: 17px; }
   .mobile-bottom-nav button { min-height: 48px; font-size: 8px; }
 }
+
+.follow-up-panel, .similar-reports-panel, .copilot-panel, .public-response-card { border: 1px solid #e1efec; border-radius: 9px; background: #f9fdfc; padding: 14px; margin: 14px 0; }
+.copilot-panel-heading { display: flex; align-items: flex-start; gap: 8px; color: var(--teal-dark); margin-bottom: 8px; }
+.copilot-panel-heading h3 { color: #435568; font: 700 12px Manrope, sans-serif; }
+.copilot-panel-heading p, .follow-up-panel > p, .similar-reports-panel > p, .public-response-card > p { color: #8291a1; font-size: 10px; line-height: 1.55; margin: 5px 0 11px; }
+.follow-up-panel .field-label, .copilot-panel .field-label { margin-bottom: 9px; }
+.similar-reports-panel { background: #fcfbff; border-color: #e9e5f7; }
+.similar-reports-panel .copilot-panel-heading { color: #7567d9; }
+.similar-report-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid #eeedf4; padding: 10px 0; }
+.similar-report-card > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.similar-report-card b { color: #46566a; font-size: 10px; overflow-wrap: anywhere; }
+.similar-report-card span, .similar-report-card small { color: #929cad; font-size: 9px; }
+.selected-match-button { flex: 0 0 auto; border: 1px solid #acd9d1; border-radius: 7px; background: #eaf7f4; color: #24786f; padding: 8px 10px; font-size: 10px; font-weight: 600; }
+.follow-up-clear { color: #4a967e; background: #eff9f4; border-radius: 7px; padding: 9px 11px; margin: 12px 0; font-size: 10px; }
+.copilot-generate { margin: 3px 0 9px; }
+.copilot-provider { display: block; color: #929cad; font-size: 9px; margin: 0 0 12px; }
+.copilot-next-steps { border-left: 2px solid #8cc8bd; padding: 7px 10px; margin: 5px 0 12px; background: #f2faf8; }
+.copilot-next-steps b { color: #55766f; font-size: 10px; }
+.copilot-next-steps p { color: #82958e; font-size: 10px; line-height: 1.5; margin-top: 4px; }
+.public-response-card { background: #f4faf8; }
+.public-response-card .copilot-panel-heading { align-items: center; }
+.public-response-card > p { color: #506b65; margin: 7px 0 0; white-space: pre-wrap; }
+@media (max-width: 540px) {
+  .similar-report-card { align-items: flex-start; flex-direction: column; }
+  .similar-report-card .secondary-button, .similar-report-card .selected-match-button { align-self: flex-end; }
+}

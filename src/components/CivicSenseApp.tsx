@@ -73,9 +73,12 @@ export type Complaint = {
   tags?: string[];
   upvotes?: number;
   masterId?: string;
+  duplicateOf?: string;
   reporter: string;
   duplicate?: string;
   campusName: string;
+  adminResponseEn?: string;
+  adminResponseAs?: string;
 };
 
 const initialComplaints: Complaint[] = [
@@ -366,7 +369,7 @@ export default function CivicSenseApp() {
       setComplaints((current) => current.map((item) => item.id === id ? { ...item, ...saved, id } : item));
       setSelected((current) => current && current.id === id ? { ...current, ...saved, id } : current);
     }
-    if (updates.status) {
+    if (updates.status || updates.adminResponseEn !== undefined || updates.adminResponseAs !== undefined) {
       fetch("/api/notifications").then((result) => result.json()).then((data) => { if (Array.isArray(data.notifications)) setNotifications(data.notifications); }).catch(() => undefined);
     }
     return true;
