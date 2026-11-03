@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   description: "Bilingual campus issue management for Dibrugarh University",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icon.svg",
-    apple: "/icon-192.png",
+    icon: "/Logo.png",
+    apple: "/Logo.png",
   },
 };
 

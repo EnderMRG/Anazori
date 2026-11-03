@@ -4,17 +4,19 @@ import { useState } from "react";
 import { AlertCircle, Building2, CheckCircle2, CheckSquare, Clock3, Download, Filter, MessageSquareText, Search, ShieldCheck, Tag, Users } from "lucide-react";
 import type { Campus } from "@/lib/campuses";
 import type { Complaint } from "@/components/CivicSenseApp";
+import { AdminSkeleton } from "@/components/SkeletonLoaders";
 
 type AdminControlRoomProps = {
   campus: Campus;
   complaints: Complaint[];
+  loading: boolean;
   onSelect: (complaint: Complaint) => void;
   onUpdateComplaint: (id: string, updates: Partial<Complaint>) => void;
 };
 
 const departments = ["Maintenance", "IT Services", "Estate & Security", "Sanitation", "Campus Administration"];
 
-export default function AdminControlRoom({ campus, complaints, onSelect, onUpdateComplaint }: AdminControlRoomProps) {
+export default function AdminControlRoom({ campus, complaints, loading, onSelect, onUpdateComplaint }: AdminControlRoomProps) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [priority, setPriority] = useState("All");
@@ -34,6 +36,8 @@ export default function AdminControlRoom({ campus, complaints, onSelect, onUpdat
     return (!query || text.includes(query.toLowerCase())) && (status === "All" || item.status === status) && (priority === "All" || item.priority === priority) && (category === "All" || item.category === category) && (department === "All" || item.department === department) && activeTags.every((tag) => (item.tags || []).includes(tag)) && (queue === "all" || (queue === "urgent" && (item.priority === "Critical" || item.priority === "High") && item.status !== "Resolved") || (queue === "triage" && item.status === "Submitted"));
   });
   const allSelected = filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id));
+
+  if (loading) return <AdminSkeleton />;
 
   function toggle(id: string) { setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]); }
   function toggleAll() { setSelectedIds(allSelected ? [] : filtered.map((item) => item.id)); }

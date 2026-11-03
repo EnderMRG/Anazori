@@ -46,6 +46,7 @@ import { getCampus, type Campus } from "@/lib/campuses";
 import AdminControlRoom from "@/components/AdminControlRoom";
 import { ComplaintDetailWorkflow, ComplaintFormWorkflow } from "@/components/ComplaintWorkflow";
 import PwaInstallButton from "@/components/PwaInstallButton";
+import { NotificationSkeleton, Skeleton, WorkspaceSkeleton } from "@/components/SkeletonLoaders";
 
 export type Language = "en" | "as" | "mixed";
 type View = "overview" | "complaints" | "analytics" | "notifications" | "settings" | "admin";
@@ -231,6 +232,8 @@ export default function CivicSenseApp() {
   const [view, setView] = useState<View>(() => pathname === "/admin" ? "admin" : "overview");
   const [role, setRole] = useState<"student" | "admin">("student");
   const [complaints, setComplaints] = useState(initialComplaints);
+  const [complaintsLoading, setComplaintsLoading] = useState(true);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [selected, setSelected] = useState<Complaint | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
@@ -300,6 +303,7 @@ export default function CivicSenseApp() {
 
   useEffect(() => {
     if (!isProtectedRoute || !currentUser) return;
+    setComplaintsLoading(true);
     fetch(`/api/complaints?campusName=${encodeURIComponent(activeCampus.name)}`)
       .then((response) => response.json())
       .then((data) => {
@@ -307,17 +311,20 @@ export default function CivicSenseApp() {
           setComplaints((current) => [...data.complaints, ...current.filter((item) => !data.complaints.some((saved: Complaint) => saved.id === item.id))] as Complaint[]);
         }
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setComplaintsLoading(false));
   }, [activeCampus.name, currentUser, isProtectedRoute]);
 
   useEffect(() => {
     if (!currentUser || currentUser.role === "admin") return;
+    setNotificationsLoading(true);
     fetch("/api/notifications")
       .then((response) => response.json())
       .then((data) => {
         if (Array.isArray(data.notifications)) setNotifications(data.notifications);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setNotificationsLoading(false));
   }, [currentUser]);
 
   const filteredComplaints = useMemo(() => {
@@ -439,7 +446,7 @@ export default function CivicSenseApp() {
   }
 
   if (isProtectedRoute && (!authResolved || !currentUser)) {
-    return <div className="route-loading"><Loader2 size={22} className="spin" /><span>Loading your campus workspace...</span></div>;
+    return <WorkspaceSkeleton />;
   }
 
   if (showCampusPicker && currentUser?.role === "student") {
@@ -493,11 +500,11 @@ export default function CivicSenseApp() {
         </header>
 
         <div className="content-wrap">
-          {view === "admin" && isAdmin && <AdminControlRoom campus={activeCampus} complaints={complaints.filter((item) => item.campusName === activeCampus.name)} onSelect={setSelected} onUpdateComplaint={updateComplaint} />}
-          {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => setShowForm(true)} onViewAll={() => navTo("complaints")} onSelect={setSelected} />}
-          {view === "complaints" && <ComplaintsView t={t} complaints={filteredComplaints} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onSubmit={() => setShowForm(true)} onSelect={setSelected} onUpdateStatus={updateStatus} role={role} />}
+          {view === "admin" && isAdmin && <AdminControlRoom campus={activeCampus} complaints={complaints.filter((item) => item.campusName === activeCampus.name)} loading={complaintsLoading} onSelect={setSelected} onUpdateComplaint={updateComplaint} />}
+          {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} loading={complaintsLoading} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => setShowForm(true)} onViewAll={() => navTo("complaints")} onSelect={setSelected} />}
+          {view === "complaints" && <ComplaintsView t={t} complaints={filteredComplaints} loading={complaintsLoading} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onSubmit={() => setShowForm(true)} onSelect={setSelected} onUpdateStatus={updateStatus} role={role} />}
           {view === "analytics" && <Analytics complaints={complaints} />}
-          {view === "notifications" && <Notifications notifications={notifications} onRead={markNotificationsRead} />}
+          {view === "notifications" && <Notifications notifications={notifications} loading={notificationsLoading} onRead={markNotificationsRead} />}
           {view === "settings" && <SettingsView language={language} setLanguage={setLanguage} role={role} setRole={setRole} onSave={() => notify("Preferences saved successfully.")} />}
         </div>
       </main>
@@ -510,7 +517,7 @@ export default function CivicSenseApp() {
 }
 
 function CivicMark() {
-  return <span className="civic-mark"><ShieldCheck size={22} strokeWidth={2.5} /><i /><i /></span>;
+  return <span className="civic-mark"><img src="/Logo.png" alt="CivicSense" /></span>;
 }
 
 function CampusSearchSelect({ label, value, campuses, onChange, required = false }: { label: string; value: string; campuses: Campus[]; onChange: (value: string) => void; required?: boolean }) {
@@ -589,14 +596,14 @@ function LandingPage({ language, onLanguageChange, onHome, onEnter, onSignUp }: 
     <main>
        <section className="landing-hero">
          <div className="landing-hero-copy"><div className="landing-eyebrow"><span /> DIBRUGARH UNIVERSITY <span /></div><h1>{isAssamese ? <>এটা উন্নত কেম্পাছৰ বাবে<br /><em>আপোনাৰ কণ্ঠস্বৰ।</em></> : <>A better campus<br /><em>starts with you.</em></>}</h1><p>{isAssamese ? "সমস্যাসমূহ সহজে জনাওক, অগ্ৰগতি চাওক আৰু একেলগে আমাৰ কেম্পাছ উন্নত কৰোঁ আহক।" : "Report campus issues in your own words, track every update, and help build a safer, smarter university community."}</p><div className="landing-hero-actions"><button className="landing-primary" onClick={onSignUp}>{isAssamese ? "এতিয়াই আৰম্ভ কৰক" : "Get started"}<ArrowRight size={17} /></button><PwaInstallButton label={isAssamese ? "এপ ইনষ্টল কৰক" : "Install app"} className="landing-install-button" /><a className="landing-play-link" href="#how-it-works"><span className="play-icon">▶</span>{isAssamese ? "ই কেনেকৈ কাম কৰে?" : "See how it works"}</a></div><div className="landing-trust"><div className="trust-avatars"><span>AR</span><span>RG</span><span>BS</span><span>+2k</span></div><div><div className="stars">★★★★★ <b>4.8/5</b></div><small>Loved by the campus community</small></div></div></div>
-        <div className="landing-visual"><div className="visual-glow" /><div className="visual-orbit orbit-one" /><div className="visual-orbit orbit-two" /><div className="dashboard-preview"><div className="preview-top"><div className="preview-brand"><span><ShieldCheck size={12} /></span><b>CivicSense</b></div><div className="preview-dots">•••</div></div><div className="preview-content"><div className="preview-greeting"><small>MONDAY, 4 NOVEMBER 2026</small><b>Good morning, Arjun</b><span>Help make campus better, one report at a time.</span></div><div className="preview-metrics"><div><i className="mini-metric orange" /><small>Active issues</small><b>12</b></div><div><i className="mini-metric green" /><small>Resolved</small><b>38</b></div><div><i className="mini-metric blue" /><small>Avg. time</small><b>2.4d</b></div></div><div className="preview-report"><div className="preview-report-head"><b>Recent complaints</b><small>View all →</small></div><div className="preview-complaint"><span className="preview-complaint-icon"><DropletIcon /></span><div><b>Water supply interrupted</b><small><MapPin size={8} /> Hostel block C · Today</small></div><span className="preview-status">In progress</span></div><div className="preview-complaint"><span className="preview-complaint-icon purple"><Bot size={13} /></span><div><b>ৱাই-ফাই সংযোগ নাই</b><small><MapPin size={8} /> Central Library · Today</small></div><span className="preview-status new">New</span></div></div></div><div className="preview-ai"><span><Sparkles size={15} /></span><div><b>AI analysis complete</b><small>Routed to Maintenance · High priority</small></div><CheckCircle2 size={17} /></div></div><div className="floating-note note-top"><span className="floating-icon"><Languages size={15} /></span><div><b>Two languages</b><small>English + অসমীয়া</small></div></div><div className="floating-note note-bottom"><span className="floating-icon green-float"><Check size={15} /></span><div><b>Resolved today</b><small>Making an impact together</small></div></div></div>
+        <div className="landing-visual"><div className="visual-glow" /><div className="visual-orbit orbit-one" /><div className="visual-orbit orbit-two" /><div className="dashboard-preview"><div className="preview-top"><div className="preview-brand"><span><img src="/Logo.png" alt="" /></span><b>CivicSense</b></div><div className="preview-dots">•••</div></div><div className="preview-content"><div className="preview-greeting"><small>MONDAY, 4 NOVEMBER 2026</small><b>Good morning, Arjun</b><span>Help make campus better, one report at a time.</span></div><div className="preview-metrics"><div><i className="mini-metric orange" /><small>Active issues</small><b>12</b></div><div><i className="mini-metric green" /><small>Resolved</small><b>38</b></div><div><i className="mini-metric blue" /><small>Avg. time</small><b>2.4d</b></div></div><div className="preview-report"><div className="preview-report-head"><b>Recent complaints</b><small>View all →</small></div><div className="preview-complaint"><span className="preview-complaint-icon"><DropletIcon /></span><div><b>Water supply interrupted</b><small><MapPin size={8} /> Hostel block C · Today</small></div><span className="preview-status">In progress</span></div><div className="preview-complaint"><span className="preview-complaint-icon purple"><Bot size={13} /></span><div><b>ৱাই-ফাই সংযোগ নাই</b><small><MapPin size={8} /> Central Library · Today</small></div><span className="preview-status new">New</span></div></div></div><div className="preview-ai"><span><Sparkles size={15} /></span><div><b>AI analysis complete</b><small>Routed to Maintenance · High priority</small></div><CheckCircle2 size={17} /></div></div><div className="floating-note note-top"><span className="floating-icon"><Languages size={15} /></span><div><b>Two languages</b><small>English + অসমীয়া</small></div></div><div className="floating-note note-bottom"><span className="floating-icon green-float"><Check size={15} /></span><div><b>Resolved today</b><small>Making an impact together</small></div></div></div>
       </section>
       <section className="landing-stats" id="impact"><div><b>2,000+</b><span>campus voices heard</span></div><div><b>94%</b><span>issues resolved</span></div><div><b>2.4 days</b><span>average resolution time</span></div><div><b>2 languages</b><span>one inclusive platform</span></div></section>
       <section className="landing-section" id="how-it-works"><div className="section-kicker">SIMPLE BY DESIGN</div><h2>From a report to a resolution,<br /><em>every step is visible.</em></h2><p className="section-intro">CivicSense takes the friction out of campus issue management so your university can focus on what matters most.</p><div className="landing-features"><FeatureCard number="01" icon={<MessageSquareText size={20} />} title="Speak your mind" text="Describe an issue naturally in English or Assamese. Add a photo and location for helpful context." /><FeatureCard number="02" icon={<Sparkles size={20} />} title="AI finds the right path" text="Our intelligent triage understands your report, sets urgency, and routes it to the right department." /><FeatureCard number="03" icon={<CheckCircle2 size={20} />} title="See real progress" text="Get clear updates from submission to resolution. Your voice stays connected to the outcome." /></div></section>
       <section className="landing-language-section" id="languages"><div className="language-section-art"><div className="language-card language-card-back">Your campus, your voice.</div><div className="language-card language-card-front"><Languages size={23} /><b>ভাল কেম্পাছ<br />আমাৰ সকলোৰে বাবে।</b><small>A better campus for everyone.</small></div></div><div><div className="section-kicker">BUILT FOR EVERY VOICE</div><h2>Technology that<br /><em>speaks your language.</em></h2><p>Real inclusion means more than translating a button. CivicSense understands Assamese reports, generates clear bilingual updates, and lets every member of the university participate with confidence.</p><button className="outline-landing-button" onClick={onEnter}>Explore CivicSense <ArrowRight size={16} /></button></div></section>
       <section className="landing-cta"><div><div className="section-kicker light-kicker">MAKE A DIFFERENCE</div><h2>Notice something?<br /><em>Let’s make it better.</em></h2></div><button className="landing-primary white-button" onClick={onEnter}>Enter CivicSense <ArrowRight size={17} /></button></section>
     </main>
-    <footer className="landing-footer"><div className="landing-brand footer-brand"><span className="landing-brand-mark"><ShieldCheck size={18} /></span><span><b>CivicSense</b><small>SMART CAMPUS CARE</small></span></div><span>Built for a more connected Dibrugarh University.</span><span>© 2026 CivicSense</span></footer>
+    <footer className="landing-footer"><div className="landing-brand footer-brand"><span className="landing-brand-mark"><img src="/Logo.png" alt="CivicSense" /></span><span><b>CivicSense</b><small>SMART CAMPUS CARE</small></span></div><span>Built for a more connected Dibrugarh University.</span><span>© 2026 CivicSense</span></footer>
   </div>;
 }
 
@@ -617,7 +624,8 @@ function MobileBottomNav({ isAdmin, view, counts, onNavigate, labels }: { isAdmi
   return <nav className={`mobile-bottom-nav ${isAdmin ? "mobile-bottom-admin" : ""}`} aria-label="Mobile navigation">{items.map((item) => <button key={item.view} className={view === item.view ? "mobile-bottom-active" : ""} onClick={() => onNavigate(item.view)} aria-label={item.label}>{item.icon}<span>{item.label}</span>{item.count ? <b>{item.count}</b> : null}</button>)}</nav>;
 }
 
-function Overview({ t, language, userName, campus, complaints, counts, onSubmit, onViewAll, onSelect }: { t: typeof copy.en; language: Language; userName: string; campus: Campus; complaints: Complaint[]; counts: { active: number; resolved: number; unread: number }; onSubmit: () => void; onViewAll: () => void; onSelect: (complaint: Complaint) => void }) {
+function Overview({ t, language, userName, campus, complaints, loading, counts, onSubmit, onViewAll, onSelect }: { t: typeof copy.en; language: Language; userName: string; campus: Campus; complaints: Complaint[]; loading: boolean; counts: { active: number; resolved: number; unread: number }; onSubmit: () => void; onViewAll: () => void; onSelect: (complaint: Complaint) => void }) {
+  if (loading) return <WorkspaceSkeleton />;
   return <div className="page-enter">
     <section className="hero-row">
       <div><div className="eyebrow"><span className="eyebrow-dot" /> {campus.name}</div><h1>{language === "as" ? `সুপ্ৰভাত, ${userName}` : `Good morning, ${userName}`}</h1><p>{t.intro}</p></div>
@@ -654,7 +662,12 @@ function ComplaintRow({ complaint, language, onClick }: { complaint: Complaint; 
   return <button className="complaint-row" onClick={onClick}><div className={`category-icon category-${complaint.category.split(" ")[0].toLowerCase().replace("/", "")}`}><MessageSquareText size={17} /></div><div className="complaint-row-main"><div className="complaint-title-line"><b>{complaint.title}</b><span className={`status-pill ${statusStyles[complaint.status]}`}><i />{complaint.status}</span></div><div className="complaint-meta"><span>{complaint.id}</span><span>·</span><span><MapPin size={12} />{complaint.location}</span><span>·</span><span>{complaint.createdAt}</span></div></div><ArrowRight size={16} className="row-arrow" /></button>;
 }
 
-function ComplaintsView({ t, complaints, search, setSearch, statusFilter, setStatusFilter, onSubmit, onSelect, onUpdateStatus, role }: { t: typeof copy.en; complaints: Complaint[]; search: string; setSearch: (value: string) => void; statusFilter: string; setStatusFilter: (value: string) => void; onSubmit: () => void; onSelect: (complaint: Complaint) => void; onUpdateStatus: (id: string, status: Status) => void; role: "student" | "admin" }) {
+function SkeletonListPlaceholder() {
+  return <div className="skeleton-complaint-list">{Array.from({ length: 5 }, (_, index) => <div className="skeleton-complaint-row" key={index}><Skeleton className="skeleton-icon" /><div className="skeleton-complaint-copy"><Skeleton className="skeleton-title" /><Skeleton className="skeleton-meta" /></div><Skeleton className="skeleton-status" /></div>)}</div>;
+}
+
+function ComplaintsView({ t, complaints, loading, search, setSearch, statusFilter, setStatusFilter, onSubmit, onSelect, onUpdateStatus, role }: { t: typeof copy.en; complaints: Complaint[]; loading: boolean; search: string; setSearch: (value: string) => void; statusFilter: string; setStatusFilter: (value: string) => void; onSubmit: () => void; onSelect: (complaint: Complaint) => void; onUpdateStatus: (id: string, status: Status) => void; role: "student" | "admin" }) {
+  if (loading) return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><MessageSquareText size={14} /> ISSUE MANAGEMENT</div><h1>{t.complaints}</h1><p>Track, manage and resolve reported campus issues.</p></div></section><div className="panel skeleton-panel"><SkeletonListPlaceholder /></div></div>;
   return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><MessageSquareText size={14} /> ISSUE MANAGEMENT</div><h1>{t.complaints}</h1><p>Track, manage and resolve reported campus issues.</p></div><button className="primary-button" onClick={onSubmit}><Plus size={18} />{t.newReport}</button></section>
     <div className="toolbar"><div className="search-box"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.search} /></div><div className="filter-wrap"><Filter size={16} /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="All">{t.all}</option><option value="Submitted">Submitted</option><option value="In progress">In progress</option><option value="Resolved">Resolved</option></select></div><button className="filter-button"><Tag size={16} />Category <ChevronDown size={14} /></button></div>
     <div className="list-panel"><div className="list-header"><span>{complaints.length} reports</span><span className="list-header-right"><span className="legend-dot legend-orange" /> Needs attention <span className="legend-dot legend-green" /> Resolved</span></div>{complaints.length ? complaints.map((complaint) => <div className="manage-row" key={complaint.id}><ComplaintRow complaint={complaint} language="en" onClick={() => onSelect(complaint)} /><div className="manage-actions"><span className="priority"><span className={`priority-dot priority-${complaint.priority.toLowerCase()}`} />{complaint.priority}</span>{role === "admin" && complaint.status !== "Resolved" && <button className="small-button" onClick={() => onUpdateStatus(complaint.id, complaint.status === "Submitted" ? "In progress" : "Resolved")}>{complaint.status === "Submitted" ? "Assign" : "Resolve"}</button>}</div></div>) : <div className="empty-state"><Search size={24} /><b>{t.noComplaints}</b><span>Try changing your search or filter.</span></div>}</div>
@@ -667,8 +680,8 @@ function Analytics({ complaints }: { complaints: Complaint[] }) {
   return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><Lightbulb size={14} /> INSIGHTS</div><h1>Campus insights</h1><p>A clear view of the issues shaping your campus.</p></div><div className="date-chip"><Clock3 size={15} /> Last 30 days <ChevronDown size={14} /></div></section><section className="analytics-grid"><div className="panel chart-panel"><div className="panel-heading"><div><h2>Issue volume</h2><p>Reports received over the past week</p></div><span className="chart-total">{complaints.length}<small>Total reports</small></span></div><div className="bars">{[34, 52, 42, 67, 48, 80, 60].map((height, index) => <div className="bar-column" key={index}><div className="bar-value" style={{ height: `${height}%` }}><span>{Math.round(height / 10)}</span></div><label>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][index]}</label></div>)}</div></div><div className="panel category-panel"><div className="panel-heading"><div><h2>Top categories</h2><p>Where attention is needed</p></div><MoreHorizontal size={19} className="muted-icon" /></div><div className="category-bars">{Object.entries(categoryCounts).slice(0, 5).map(([category, value]) => <div className="category-bar-row" key={category}><div><span>{category}</span><b>{value}</b></div><div className="progress-track"><div style={{ width: `${(value / max) * 100}%` }} /></div></div>)}</div></div></section><section className="insight-cards"><div className="insight-card"><div className="insight-circle insight-green"><CheckCircle2 size={19} /></div><b>Resolution is improving</b><p>Average resolution time is 12% faster than last month.</p></div><div className="insight-card"><div className="insight-circle insight-orange"><AlertCircle size={19} /></div><b>Safety needs attention</b><p>Safety & security reports have increased this week.</p></div><div className="insight-card"><div className="insight-circle insight-blue"><Bot size={19} /></div><b>AI triage is active</b><p>100% of recent reports received an instant AI analysis.</p></div></section></div>;
 }
 
-function Notifications({ notifications, onRead }: { notifications: NotificationItem[]; onRead: () => void }) {
-  return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><Bell size={14} /> UPDATES</div><h1>Notifications</h1><p>Stay updated on your reports and campus activity.</p></div><button className="secondary-button" onClick={onRead}><Check size={16} /> Mark all as read</button></section><div className="notification-list">{notifications.map((notification) => <div className={`notification-card ${notification.unread ? "notification-unread" : ""}`} key={notification.id}><div className="notification-icon"><Bell size={18} /></div><div><b>{notification.title}</b><p>{notification.body}</p><span>{notification.time}</span></div>{notification.unread && <span className="unread-dot" />}</div>)}</div></div>;
+function Notifications({ notifications, loading, onRead }: { notifications: NotificationItem[]; loading: boolean; onRead: () => void }) {
+  return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><Bell size={14} /> UPDATES</div><h1>Notifications</h1><p>Stay updated on your reports and campus activity.</p></div><button className="secondary-button" onClick={onRead}><Check size={16} /> Mark all as read</button></section>{loading ? <NotificationSkeleton /> : <div className="notification-list">{notifications.map((notification) => <div className={`notification-card ${notification.unread ? "notification-unread" : ""}`} key={notification.id}><div className="notification-icon"><Bell size={18} /></div><div><b>{notification.title}</b><p>{notification.body}</p><span>{notification.time}</span></div>{notification.unread && <span className="unread-dot" />}</div>)}</div>}</div>;
 }
 
  function SettingsView({ language, setLanguage, role, setRole, onSave }: { language: Language; setLanguage: (language: Language) => void; role: "student" | "admin"; setRole: (role: "student" | "admin") => void; onSave: () => void }) {

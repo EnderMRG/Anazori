@@ -1,5 +1,5 @@
 const CACHE_NAME = "civicsense-shell-v1";
-const APP_SHELL = ["/", "/auth/signin", "/auth/signup", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", "/offline.html"];
+const APP_SHELL = ["/", "/auth/signin", "/auth/signup", "/manifest.webmanifest", "/Logo.png", "/icon-192.png", "/icon-512.png", "/offline.html"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
