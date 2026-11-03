@@ -57,6 +57,7 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
   const [duplicateOf, setDuplicateOf] = useState("");
   const [analysing, setAnalysing] = useState(false);
   const [error, setError] = useState("");
+  const [reviewWarning, setReviewWarning] = useState("");
   const [serviceFields, setServiceFields] = useState<Record<string, string>>({});
   const serviceDetails = studentServiceOptions.find((item) => item.label === selectedService);
 
@@ -67,6 +68,7 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
     setSimilarReports([]);
     setDuplicateOf("");
     setError("");
+    setReviewWarning("");
   }
 
   async function analyze(event: FormEvent) {
@@ -81,16 +83,39 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Unable to analyse the report.");
       const request = { title, description: requestDescription, location, category: String(data.category || ""), tags: Array.isArray(data.tags) ? data.tags.filter((tag: unknown): tag is string => typeof tag === "string") : [] };
-      const [followUpResponse, duplicatesResponse] = await Promise.all([
-        fetch("/api/ai/follow-up", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, description: requestDescription, location }) }),
-        fetch("/api/complaints/duplicates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) }),
-      ]);
-      const [followUpData, duplicatesData] = await Promise.all([followUpResponse.json(), duplicatesResponse.json()]);
-      if (!followUpResponse.ok) throw new Error(followUpData.error || "Unable to prepare a follow-up question.");
-      if (!duplicatesResponse.ok) throw new Error(duplicatesData.error || "Unable to check for similar reports.");
-      setFollowUp({ needed: Boolean(followUpData.needed), questionEn: String(followUpData.questionEn || ""), questionAs: String(followUpData.questionAs || ""), language: (followUpData.language || language) as Language });
-      setSimilarReports(Array.isArray(duplicatesData.matches) ? duplicatesData.matches : []);
       setAnalysis(data);
+      const [followUpResult, duplicatesResult] = await Promise.allSettled([
+        fetch("/api/ai/follow-up", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, description: requestDescription, location }) })
+          .then(async (result) => {
+            const payload = await result.json();
+            if (!result.ok) throw new Error(payload.error || "Unable to prepare a follow-up question.");
+            return payload;
+          }),
+        fetch("/api/complaints/duplicates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) })
+          .then(async (result) => {
+            const payload = await result.json();
+            if (!result.ok) throw new Error(payload.error || "Unable to check for similar reports.");
+            return payload;
+          }),
+      ]);
+      const warnings: string[] = [];
+      if (followUpResult.status === "fulfilled") {
+        const followUpData = followUpResult.value;
+        setFollowUp({ needed: Boolean(followUpData.needed), questionEn: String(followUpData.questionEn || ""), questionAs: String(followUpData.questionAs || ""), language: (followUpData.language || language) as Language });
+      } else {
+        setFollowUp(null);
+        warnings.push("The clarification assistant is unavailable; you can still submit your report.");
+        console.error("Follow-up assistant unavailable.", followUpResult.reason);
+      }
+      if (duplicatesResult.status === "fulfilled") {
+        setSimilarReports(Array.isArray(duplicatesResult.value.matches) ? duplicatesResult.value.matches : []);
+      } else {
+        setSimilarReports([]);
+        setDuplicateOf("");
+        warnings.push("Similar reports could not be checked; you can still submit your report.");
+        console.error("Duplicate lookup unavailable.", duplicatesResult.reason);
+      }
+      setReviewWarning(warnings.join(" "));
       const selectedServiceDetails = studentServiceOptions.find((item) => item.label === selectedService);
       if (serviceCategory && selectedServiceDetails) {
         setAnalysis({ ...data, category: selectedService, department: selectedServiceDetails.department });
@@ -165,6 +190,7 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
         {followUp?.needed && <section className="follow-up-panel"><div className="copilot-panel-heading"><MessageSquareText size={17} /><b>One quick clarification</b></div><p>{question}</p><label className="field-label">Your answer<textarea value={followUpAnswer} onChange={(event) => setFollowUpAnswer(event.target.value)} rows={2} placeholder={followUp.language === "as" ? "আপোনাৰ উত্তৰ..." : "Add a short answer..."} /></label></section>}
         {similarReports.length > 0 && <section className="similar-reports-panel"><div className="copilot-panel-heading"><CopyCheck size={17} /><b>Possible duplicate reports</b></div><p>AI compared reports across Assamese and English. Choose one only if it describes the same issue; otherwise submit separately.</p>{similarReports.map((match) => <div className="similar-report-card" key={match.id}><div><b>{match.title}</b><span>{match.id} · {match.location} · {match.category} · {match.language === "as" ? "অসমীয়া" : "English"}</span><small>{match.reason} · {Math.round(match.score * 100)}% match</small></div><button type="button" className={duplicateOf === match.id ? "selected-match-button" : "secondary-button"} onClick={() => setDuplicateOf(duplicateOf === match.id ? "" : match.id)}>{duplicateOf === match.id ? "Selected" : "Same issue"}</button></div>)}{duplicateOf && <button type="button" className="text-button" onClick={() => setDuplicateOf("")}>No, submit a separate report</button>}</section>}
         {analysis && !followUp?.needed && <div className="follow-up-clear">The report has enough detail to continue without a clarification.</div>}
+        {reviewWarning && <div className="duplicate-alert"><AlertCircle size={18} /><span>{reviewWarning}</span></div>}
         {error && <div className="duplicate-alert"><AlertCircle size={18} /><span>{error}</span></div>}
         <button className="primary-button form-submit" disabled={analysing}>{analysing ? <><Loader2 size={17} className="spin" /> {analysis ? "Submitting report..." : "Checking report..."}</> : analysis ? <><Check size={17} /> Submit report</> : <><Sparkles size={17} /> Analyse report</>}</button>
       </form>
