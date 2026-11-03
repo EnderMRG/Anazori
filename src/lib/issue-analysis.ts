@@ -26,6 +26,15 @@ const rules = [
   { category: "Lab & equipment", department: "Maintenance", aliases: ["lab", "laboratory", "equipment", "instrument", "projector", "microscope", "পৰীক্ষাগাৰ", "সঁজুলি"], tags: ["#Equipment"], priority: "Medium" as IssuePriority },
   { category: "Furniture & facilities", department: "Maintenance", aliases: ["chair", "desk", "bench", "table", "furniture", "door", "window", "আচবাব", "দুৱাৰ", "খিৰিকী"], tags: ["#CivilWork"], priority: "Medium" as IssuePriority },
   { category: "Transport & access", department: "Campus Administration", aliases: ["bus", "transport", "parking", "road", "pothole", "vehicle", "বাছ", "পথ"], tags: ["#Access"], priority: "Medium" as IssuePriority },
+  { category: "Exam fees", department: "Accounts & Finance", aliases: ["exam fee", "examination fee", "exam fees", "পৰীক্ষাৰ মাচুল"], tags: ["#StudentServices", "#Fees"], priority: "High" as IssuePriority },
+  { category: "Semester fees", department: "Accounts & Finance", aliases: ["semester fee", "semester fees", "tuition fee", "tuition fees", "মাচুল"], tags: ["#StudentServices", "#Fees"], priority: "Medium" as IssuePriority },
+  { category: "Scholarships & financial aid", department: "Scholarship Office", aliases: ["scholarship", "stipend", "financial aid", "grant", "বৃত্তি", "জলপানি"], tags: ["#StudentServices", "#Scholarship"], priority: "High" as IssuePriority },
+  { category: "Student welfare & counselling", department: "Student Welfare Office", aliases: ["student welfare", "welfare", "counselling", "counseling", "mental health", "wellbeing", "কল্যাণ", "পৰামৰ্শ"], tags: ["#StudentServices", "#Welfare"], priority: "High" as IssuePriority },
+  { category: "Library services", department: "Library Services", aliases: ["library", "book", "librarian", "library fine", "লাইব্ৰেৰী", "কিতাপ"], tags: ["#StudentServices", "#Library"], priority: "Medium" as IssuePriority },
+  { category: "Examinations & marksheets", department: "Examination Cell", aliases: ["examination", "marksheet", "mark sheet", "result", "grade", "exam form", "পৰীক্ষা", "নম্বৰ", "মাৰ্কশ্বীট"], tags: ["#StudentServices", "#Examinations"], priority: "Medium" as IssuePriority },
+  { category: "Registration & enrollment", department: "Academic Section", aliases: ["registration", "enrollment", "enrolment", "course registration", "admission", "পঞ্জীয়ন", "নামভৰ্তি"], tags: ["#StudentServices", "#Academic"], priority: "Medium" as IssuePriority },
+  { category: "Certificates & documents", department: "Registrar's Office", aliases: ["bonafide", "migration", "certificate", "transcript", "document", "প্ৰমাণপত্ৰ", "নথি"], tags: ["#StudentServices", "#Documents"], priority: "Low" as IssuePriority },
+  { category: "Hostel & student support", department: "Student Welfare Office", aliases: ["hostel allotment", "hostel complaint", "student support", "ছাত্ৰাবাস", "শিক্ষাৰ্থী সহায়"], tags: ["#StudentServices", "#StudentSupport"], priority: "Medium" as IssuePriority },
 ];
 
 const stopWords = new Set(["the", "and", "for", "with", "this", "that", "there", "have", "been", "from", "since", "near", "issue", "problem", "মই", "এই", "আছে", "নাই", "কৰা"]);
@@ -92,7 +101,7 @@ export async function analyseIssueWithProvider(input: AnalysisInput, fallback = 
   const key = process.env.GEMINI_API_KEY;
   if (!key) return { result: fallback, provider: "local" };
   const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-  const parts: Array<Record<string, unknown>> = [{ text: `Analyse this campus grievance. Return only JSON with category, department, priority (Critical|High|Medium|Low), language (en|as|mixed), tags (2-4 hashtag strings), summaryEn, summaryAs, justification, and confidence (0-1). Preserve concrete details from the report in both summaries. Do not invent facts.\nTitle: ${input.title}\nDescription: ${input.description}\nLocation: ${input.location}` }];
+  const parts: Array<Record<string, unknown>> = [{ text: `Analyse this campus grievance or student service request. It may concern physical campus conditions, administration, examinations, fees, library services, scholarships, or student welfare. Return only JSON with category, department, priority (Critical|High|Medium|Low), language (en|as|mixed), tags (2-4 hashtag strings), summaryEn, summaryAs, justification, and confidence (0-1). Preserve concrete details from the report in both summaries. Do not invent facts.\nTitle: ${input.title}\nDescription: ${input.description}\nLocation: ${input.location}` }];
   if (input.image?.startsWith("data:")) {
     const match = input.image.match(/^data:([^;]+);base64,(.+)$/);
     if (match && Buffer.byteLength(match[2], "base64") <= 8 * 1024 * 1024) parts.push({ inline_data: { mime_type: match[1], data: match[2] } });

@@ -14,7 +14,7 @@ type AdminControlRoomProps = {
   onUpdateComplaint: (id: string, updates: Partial<Complaint>) => void;
 };
 
-const departments = ["Maintenance", "IT Services", "Estate & Security", "Sanitation", "Campus Administration"];
+const departments = ["Maintenance", "IT Services", "Estate & Security", "Sanitation", "Campus Administration", "Library Services", "Examination Cell", "Accounts & Finance", "Academic Section", "Registrar's Office", "Scholarship Office", "Student Welfare Office"];
 
 export default function AdminControlRoom({ campus, complaints, loading, onSelect, onUpdateComplaint }: AdminControlRoomProps) {
   const [query, setQuery] = useState("");

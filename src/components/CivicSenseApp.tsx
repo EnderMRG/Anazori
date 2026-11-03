@@ -49,7 +49,7 @@ import PwaInstallButton from "@/components/PwaInstallButton";
 import { NotificationSkeleton, Skeleton, WorkspaceSkeleton } from "@/components/SkeletonLoaders";
 
 export type Language = "en" | "as" | "mixed";
-type View = "overview" | "complaints" | "analytics" | "notifications" | "settings" | "admin";
+type View = "overview" | "complaints" | "services" | "analytics" | "notifications" | "settings" | "admin";
 export type Status = "Submitted" | "In progress" | "Resolved";
 export type Priority = "Critical" | "High" | "Medium" | "Low";
 type AuthUser = { id: string; name: string; email: string; role: "student" | "admin"; campusName: string };
@@ -150,6 +150,7 @@ const copy = {
   en: {
     overview: "Overview",
     complaints: "My complaints",
+    services: "Student services",
     analytics: "Campus insights",
     notifications: "Notifications",
     settings: "Settings",
@@ -177,6 +178,7 @@ const copy = {
   as: {
     overview: "অভাৰভিউ",
     complaints: "মোৰ অভিযোগসমূহ",
+    services: "শিক্ষাৰ্থী সেৱাসমূহ",
     analytics: "কেম্পাছৰ তথ্য",
     notifications: "জাননীসমূহ",
     settings: "ছেটিংছ",
@@ -236,6 +238,7 @@ export default function CivicSenseApp() {
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [selected, setSelected] = useState<Complaint | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [formServiceCategory, setFormServiceCategory] = useState<string | undefined>();
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [toast, setToast] = useState("");
   const [search, setSearch] = useState("");
@@ -405,6 +408,11 @@ export default function CivicSenseApp() {
     setShowMobileNav(false);
   }
 
+  function openForm(serviceCategory?: string) {
+    setFormServiceCategory(serviceCategory);
+    setShowForm(true);
+  }
+
   function openAuth(mode: "signin" | "signup") {
     setAuthMode(mode);
     router.push(`/auth/${mode}`);
@@ -466,11 +474,12 @@ export default function CivicSenseApp() {
           <div className="workspace-copy"><b>{activeCampus.name}</b><span>{isAdmin ? "Administrator" : "Student portal"}</span></div>
           <ChevronDown size={16} className="muted-icon" />
         </div>
-        <div className="sidebar-label">{isAdmin ? "Administration" : "Workspace"}</div>
+          <div className="sidebar-label">{isAdmin ? "Administration" : "Workspace"}</div>
         {isAdmin ? <nav className="main-nav admin-nav"><NavButton active={view === "admin"} icon={<ShieldCheck size={18} />} label="Admin panel" count={complaints.filter((item) => item.campusName === activeCampus.name && item.status !== "Resolved").length} onClick={() => navTo("admin")} /></nav> : <nav className="main-nav">
-          <NavButton active={view === "overview"} icon={<LayoutDashboard size={18} />} label={t.overview} onClick={() => navTo("overview")} />
-          <NavButton active={view === "complaints"} icon={<MessageSquareText size={18} />} label={t.complaints} count={counts.active} onClick={() => navTo("complaints")} />
-          <NavButton active={view === "analytics"} icon={<Lightbulb size={18} />} label={t.analytics} onClick={() => navTo("analytics")} />
+           <NavButton active={view === "overview"} icon={<LayoutDashboard size={18} />} label={t.overview} onClick={() => navTo("overview")} />
+           <NavButton active={view === "complaints"} icon={<MessageSquareText size={18} />} label={t.complaints} count={counts.active} onClick={() => navTo("complaints")} />
+           <NavButton active={view === "services"} icon={<BookOpen size={18} />} label={t.services} onClick={() => navTo("services")} />
+           <NavButton active={view === "analytics"} icon={<Lightbulb size={18} />} label={t.analytics} onClick={() => navTo("analytics")} />
           <NavButton active={view === "notifications"} icon={<Bell size={18} />} label={t.notifications} count={counts.unread} onClick={() => { navTo("notifications"); markNotificationsRead(); }} />
         </nav>}
         <div className="sidebar-spacer" />
@@ -491,7 +500,7 @@ export default function CivicSenseApp() {
       <main className="main-content">
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setShowMobileNav(true)} aria-label="Open menu"><Menu size={21} /></button>
-          <div className="breadcrumb"><span>{activeCampus.name}</span><span className="breadcrumb-separator">/</span><b>{view === "overview" ? t.overview : view === "complaints" ? t.complaints : view === "analytics" ? t.analytics : view === "notifications" ? t.notifications : view === "admin" ? "Admin panel" : t.settings}</b></div>
+          <div className="breadcrumb"><span>{activeCampus.name}</span><span className="breadcrumb-separator">/</span><b>{view === "overview" ? t.overview : view === "complaints" ? t.complaints : view === "services" ? t.services : view === "analytics" ? t.analytics : view === "notifications" ? t.notifications : view === "admin" ? "Admin panel" : t.settings}</b></div>
           <div className="top-actions">
             <button className="language-toggle" onClick={() => setLanguage(language === "en" ? "as" : "en")}><Languages size={16} /><span>{language === "en" ? "অসমীয়া" : "English"}</span></button>
             {!isAdmin && <button className="icon-button notification-button" onClick={() => { navTo("notifications"); markNotificationsRead(); }} aria-label="Notifications"><Bell size={19} />{counts.unread > 0 && <span className="notification-dot" />}</button>}
@@ -501,8 +510,9 @@ export default function CivicSenseApp() {
 
         <div className="content-wrap">
           {view === "admin" && isAdmin && <AdminControlRoom campus={activeCampus} complaints={complaints.filter((item) => item.campusName === activeCampus.name)} loading={complaintsLoading} onSelect={setSelected} onUpdateComplaint={updateComplaint} />}
-          {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} loading={complaintsLoading} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => setShowForm(true)} onViewAll={() => navTo("complaints")} onSelect={setSelected} />}
-          {view === "complaints" && <ComplaintsView t={t} complaints={filteredComplaints} loading={complaintsLoading} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onSubmit={() => setShowForm(true)} onSelect={setSelected} onUpdateStatus={updateStatus} role={role} />}
+          {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} loading={complaintsLoading} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => openForm()} onViewAll={() => navTo("complaints")} onSelect={setSelected} />}
+          {view === "complaints" && <ComplaintsView t={t} complaints={filteredComplaints} loading={complaintsLoading} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onSubmit={() => openForm()} onSelect={setSelected} onUpdateStatus={updateStatus} role={role} />}
+          {view === "services" && <StudentServices onSubmit={openForm} />}
           {view === "analytics" && <Analytics complaints={complaints} />}
           {view === "notifications" && <Notifications notifications={notifications} loading={notificationsLoading} onRead={markNotificationsRead} />}
           {view === "settings" && <SettingsView language={language} setLanguage={setLanguage} role={role} setRole={setRole} onSave={() => notify("Preferences saved successfully.")} />}
@@ -510,7 +520,7 @@ export default function CivicSenseApp() {
       </main>
 
       {selected && <ComplaintDetailWorkflow complaint={selected} language={language} onClose={() => setSelected(null)} onUpdate={updateComplaint} role={role} />}
-      {showForm && <ComplaintFormWorkflow language={language} campus={activeCampus} onClose={() => setShowForm(false)} onSubmit={addComplaint} />}
+      {showForm && <ComplaintFormWorkflow language={language} campus={activeCampus} serviceCategory={formServiceCategory} onClose={() => { setShowForm(false); setFormServiceCategory(undefined); }} onSubmit={addComplaint} />}
       {toast && <div className="toast"><CheckCircle2 size={18} /><span>{toast}</span></div>}
     </div>
   );
@@ -620,8 +630,23 @@ function NavButton({ active, icon, label, count, onClick }: { active: boolean; i
 function MobileBottomNav({ isAdmin, view, counts, onNavigate, labels }: { isAdmin: boolean; view: View; counts: { active: number; unread: number }; onNavigate: (view: View) => void; labels: typeof copy.en }) {
   const items: Array<{ view: View; label: string; icon: React.ReactNode; count?: number }> = isAdmin
     ? [{ view: "admin", label: "Admin", icon: <ShieldCheck size={18} />, count: counts.active }, { view: "settings", label: "Settings", icon: <Settings size={18} /> }]
-    : [{ view: "overview", label: labels.overview, icon: <LayoutDashboard size={18} /> }, { view: "complaints", label: labels.complaints, icon: <MessageSquareText size={18} />, count: counts.active }, { view: "analytics", label: labels.analytics, icon: <Lightbulb size={18} /> }, { view: "notifications", label: labels.notifications, icon: <Bell size={18} />, count: counts.unread }, { view: "settings", label: labels.settings, icon: <Settings size={18} /> }];
+    : [{ view: "overview", label: labels.overview, icon: <LayoutDashboard size={18} /> }, { view: "complaints", label: labels.complaints, icon: <MessageSquareText size={18} />, count: counts.active }, { view: "services", label: labels.services, icon: <BookOpen size={18} /> }, { view: "analytics", label: labels.analytics, icon: <Lightbulb size={18} /> }, { view: "notifications", label: labels.notifications, icon: <Bell size={18} />, count: counts.unread }, { view: "settings", label: labels.settings, icon: <Settings size={18} /> }];
   return <nav className={`mobile-bottom-nav ${isAdmin ? "mobile-bottom-admin" : ""}`} aria-label="Mobile navigation">{items.map((item) => <button key={item.view} className={view === item.view ? "mobile-bottom-active" : ""} onClick={() => onNavigate(item.view)} aria-label={item.label}>{item.icon}<span>{item.label}</span>{item.count ? <b>{item.count}</b> : null}</button>)}</nav>;
+}
+
+function StudentServices({ onSubmit }: { onSubmit: (serviceCategory?: string) => void }) {
+  const services = [
+    { label: "Library services", description: "Books, fines, access, and library accounts.", icon: <BookOpen size={19} />, accent: "blue" },
+    { label: "Examinations & marksheets", description: "Exam forms, results, marksheets, and corrections.", icon: <FileText size={19} />, accent: "purple" },
+    { label: "Exam fees", description: "Payment issues, receipts, and exam fee questions.", icon: <span className="service-symbol">₹</span>, accent: "orange" },
+    { label: "Semester fees", description: "Tuition payments, dues, and fee receipts.", icon: <span className="service-symbol">₹</span>, accent: "green" },
+    { label: "Registration & enrollment", description: "Course registration, admission, and enrollment help.", icon: <Users size={19} />, accent: "blue" },
+    { label: "Certificates & documents", description: "Bonafide, migration, transcripts, and certificates.", icon: <FileText size={19} />, accent: "purple" },
+    { label: "Scholarships & financial aid", description: "Scholarship applications, stipends, and grants.", icon: <Sparkles size={19} />, accent: "orange" },
+    { label: "Student welfare & counselling", description: "Wellbeing, counselling, accessibility, and support.", icon: <Users size={19} />, accent: "green" },
+    { label: "Hostel & student support", description: "Student support services and hostel administration.", icon: <Building2 size={19} />, accent: "blue" },
+  ];
+  return <div className="page-enter student-services-page"><section className="page-heading-row"><div><div className="eyebrow"><BookOpen size={14} /> STUDENT SUPPORT</div><h1>Student Services</h1><p>Choose a service below to open the right form for your request.</p></div></section><div className="services-intro"><div className="service-intro-icon"><Sparkles size={22} /></div><div><b>One place for every student query</b><p>Each service has its own prompts and fields so the right university office gets the details it needs.</p></div></div><section className="student-service-grid">{services.map((service) => <button className="student-service-card" key={service.label} onClick={() => onSubmit(service.label)}><span className={`service-card-icon service-card-${service.accent}`}>{service.icon}</span><span className="student-service-copy"><b>{service.label}</b><span>{service.description}</span></span><ArrowRight size={16} className="row-arrow" /></button>)}</section></div>;
 }
 
 function Overview({ t, language, userName, campus, complaints, loading, counts, onSubmit, onViewAll, onSelect }: { t: typeof copy.en; language: Language; userName: string; campus: Campus; complaints: Complaint[]; loading: boolean; counts: { active: number; resolved: number; unread: number }; onSubmit: () => void; onViewAll: () => void; onSelect: (complaint: Complaint) => void }) {
