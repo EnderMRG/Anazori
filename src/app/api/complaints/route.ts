@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { analyseIssue, duplicateScore, escalatedPriority, type IssueAnalysis } from "@/lib/issue-analysis";
+import { analyseIssue, duplicateScore, escalatedPriority, improveBilingualSummaries, type IssueAnalysis } from "@/lib/issue-analysis";
 
 type ComplaintWithUser = Prisma.ComplaintGetPayload<{ include: { user: { select: { name: true } } } }>;
 
@@ -61,9 +61,17 @@ export async function POST(request: Request) {
     if (!validImage(image)) return NextResponse.json({ error: "Evidence must be a supported image smaller than 8 MB." }, { status: 400 });
 
     const fallback = analyseIssue({ title, description, location, image });
-    const analysis: IssueAnalysis = {
+    let analysis: IssueAnalysis = {
       ...fallback,
+      category: typeof body.category === "string" ? body.category : fallback.category,
+      department: typeof body.department === "string" ? body.department : fallback.department,
+      priority: ["Critical", "High", "Medium", "Low"].includes(String(body.priority)) ? String(body.priority) as IssueAnalysis["priority"] : fallback.priority,
+      language: ["en", "as", "mixed"].includes(String(body.language)) ? String(body.language) as IssueAnalysis["language"] : fallback.language,
+      tags: Array.isArray(body.tags) ? body.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 4) : fallback.tags,
+      summaryEn: typeof body.summaryEn === "string" ? body.summaryEn.slice(0, 500) : fallback.summaryEn,
+      summaryAs: typeof body.summaryAs === "string" ? body.summaryAs.slice(0, 500) : fallback.summaryAs,
     };
+    if (typeof body.summaryEn !== "string" || typeof body.summaryAs !== "string") analysis = await improveBilingualSummaries({ title, description, location, image }, analysis);
 
     const activeComplaints = await prisma.complaint.findMany({ where: { campusName: session.campusName, status: { not: "Resolved" }, masterId: null }, orderBy: { createdAt: "desc" }, take: 250 });
     const duplicate = activeComplaints.map((item) => ({ item, score: duplicateScore({ title, description, location, category: analysis.category, tags: analysis.tags }, item) })).sort((a, b) => b.score - a.score)[0];

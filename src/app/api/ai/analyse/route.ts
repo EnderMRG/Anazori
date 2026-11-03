@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
-import { analyseIssue, analyseIssueWithProvider, type IssueAnalysis } from "@/lib/issue-analysis";
+import { analyseIssue, analyseIssueWithProvider, improveBilingualSummaries, type IssueAnalysis } from "@/lib/issue-analysis";
 
 export const runtime = "nodejs";
 
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const fallback = analyseIssue(input);
     const key = requestKey(input);
     const cached = cache.get(key);
-    if (cached && cached.expires > Date.now()) return NextResponse.json({ ...cached.result, model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite", provider: "cache" });
+    if (cached && cached.expires > Date.now()) return NextResponse.json({ ...cached.result, model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite", provider: "cache", translationProvider: "cached" });
     if (Date.now() - windowStarted >= 60_000) { windowStarted = Date.now(); windowRequests = 0; }
     const maxRequests = Math.max(1, Number(process.env.GEMINI_REQUESTS_PER_MINUTE || 8));
     if (process.env.GEMINI_API_KEY && windowRequests >= maxRequests) return NextResponse.json({ ...fallback, model: "CivicSense local triage", provider: "rate-limited-fallback", warning: "Gemini request limit reached; local triage was used." });
@@ -48,12 +48,13 @@ export async function POST(request: Request) {
       const result = await analyseIssueWithProvider(input, fallback);
       if (result.provider === "gemini") {
         cache.set(key, { expires: Date.now() + 10 * 60_000, result: result.result });
-        return NextResponse.json({ ...result.result, model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite", provider: "gemini" });
+        return NextResponse.json({ ...result.result, model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite", provider: "gemini", translationProvider: "IndicTrans2" });
       }
     } catch (error) {
       console.error("Gemini analysis unavailable; using local triage.", error);
     }
-    return NextResponse.json({ ...fallback, model: "CivicSense local triage", provider: "local" });
+    const localizedFallback = await improveBilingualSummaries(input, fallback);
+    return NextResponse.json({ ...localizedFallback, model: "CivicSense local triage", provider: "local", translationProvider: "IndicTrans2" });
   } catch {
     return NextResponse.json({ error: "Unable to analyse this report." }, { status: 400 });
   }

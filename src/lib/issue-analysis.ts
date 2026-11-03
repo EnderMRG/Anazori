@@ -1,5 +1,6 @@
 export type IssueLanguage = "en" | "as" | "mixed";
 export type IssuePriority = "Critical" | "High" | "Medium" | "Low";
+import { translateText } from "@/lib/translation";
 
 export type IssueAnalysis = {
   category: string;
@@ -71,9 +72,20 @@ export function analyseIssue({ title, description, location, image }: AnalysisIn
   const tags = Array.from(new Set([facilityTag(location), ...(rule?.tags || ["#CampusCare"]), hazard ? "#Hazard" : priority === "Low" ? "#Routine" : priority === "Medium" ? "#Standard" : "#Urgent"])).slice(0, 4);
   const language = detectLanguage(`${title} ${description}`);
   const report = title.trim() || description.trim() || "Campus issue";
-  const summaryEn = `${report} was reported at ${location || "the campus"}. ${department} will review the ${category.toLowerCase()} concern${image ? " with the attached evidence" : ""}.`;
-  const summaryAs = `${location || "কেম্পাছ"} স্থানত ${category === "Other campus issue" ? "এই সমস্যাটো" : category} সম্পৰ্কে অভিযোগ দাখিল কৰা হৈছে। ${department} দলে পৰ্যালোচনা কৰিব${image ? " আৰু সংলগ্ন ছবিখন পৰীক্ষা কৰিব" : ""}।`;
+  const summaryEn = `${report} was reported at ${location || "the campus"}. The campus team will review this issue${image ? " with the attached evidence" : ""}.`;
+  const summaryAs = `${location || "কেম্পাছ"} স্থানত এই সমস্যাটোৰ অভিযোগ দাখিল কৰা হৈছে। কেম্পাছৰ সংশ্লিষ্ট দলে ইয়াক পৰ্যালোচনা কৰিব${image ? " আৰু সংলগ্ন ছবিখন পৰীক্ষা কৰিব" : ""}।`;
   return { category, department, priority, language, tags, summaryEn, summaryAs, justification: `Matched ${category.toLowerCase()} signals and routed to ${department}.`, confidence: rule ? 0.86 : 0.48, imageAssessment: image ? "Image attached for staff review." : "No image attached." };
+}
+
+export async function improveBilingualSummaries(input: AnalysisInput, analysis: IssueAnalysis): Promise<IssueAnalysis> {
+  const description = input.description.trim();
+  const source = (description || input.title.trim()).replace(/\s+/g, " ").slice(0, 1900);
+  const containsAssamese = /[\u0980-\u09ff]/u.test(source);
+  const translatedSource = containsAssamese ? await translateText(source, "as", "en") : source;
+  const reportEn = (translatedSource || source).replace(/\s+/g, " ").trim();
+  const summaryEn = `${reportEn} Reported at ${input.location || "the campus"}. The campus team will review this issue.`.slice(0, 500);
+  const summaryAs = await translateText(summaryEn, "en", "as");
+  return { ...analysis, summaryEn, summaryAs: summaryAs || analysis.summaryAs };
 }
 
 export async function analyseIssueWithProvider(input: AnalysisInput, fallback = analyseIssue(input)) {
@@ -85,14 +97,15 @@ export async function analyseIssueWithProvider(input: AnalysisInput, fallback = 
     const match = input.image.match(/^data:([^;]+);base64,(.+)$/);
     if (match && Buffer.byteLength(match[2], "base64") <= 8 * 1024 * 1024) parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
   }
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }) });
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }), signal: AbortSignal.timeout(8_000) });
   if (!response.ok) throw new Error(`Gemini request failed with ${response.status}`);
   const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
   const raw = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
   const value = JSON.parse(raw) as Record<string, unknown>;
   const priority = ["Critical", "High", "Medium", "Low"].includes(String(value.priority)) ? String(value.priority) as IssuePriority : fallback.priority;
   const language = ["en", "as", "mixed"].includes(String(value.language)) ? String(value.language) as IssueLanguage : fallback.language;
-  return { provider: "gemini", result: { ...fallback, category: typeof value.category === "string" ? value.category.slice(0, 80) : fallback.category, department: typeof value.department === "string" ? value.department.slice(0, 80) : fallback.department, priority, language, tags: Array.isArray(value.tags) ? value.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.startsWith("#") ? tag : `#${tag}`).slice(0, 4) : fallback.tags, summaryEn: typeof value.summaryEn === "string" ? value.summaryEn.slice(0, 500) : fallback.summaryEn, summaryAs: typeof value.summaryAs === "string" ? value.summaryAs.slice(0, 500) : fallback.summaryAs, justification: typeof value.justification === "string" ? value.justification.slice(0, 300) : fallback.justification, confidence: typeof value.confidence === "number" ? Math.max(0, Math.min(1, value.confidence)) : fallback.confidence } };
+  const result = { ...fallback, category: typeof value.category === "string" ? value.category.slice(0, 80) : fallback.category, department: typeof value.department === "string" ? value.department.slice(0, 80) : fallback.department, priority, language, tags: Array.isArray(value.tags) ? value.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.startsWith("#") ? tag : `#${tag}`).slice(0, 4) : fallback.tags, summaryEn: typeof value.summaryEn === "string" ? value.summaryEn.slice(0, 500) : fallback.summaryEn, summaryAs: typeof value.summaryAs === "string" ? value.summaryAs.slice(0, 500) : fallback.summaryAs, justification: typeof value.justification === "string" ? value.justification.slice(0, 300) : fallback.justification, confidence: typeof value.confidence === "number" ? Math.max(0, Math.min(1, value.confidence)) : fallback.confidence };
+  return { provider: "gemini", result: await improveBilingualSummaries(input, result) };
 }
 
 export function canonicalTerms(value: string) {
