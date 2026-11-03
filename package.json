@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",
+    "db:push": "prisma db push",
     "db:setup": "prisma db execute --schema prisma/schema.prisma --file prisma/init.sql",
     "db:seed": "node prisma/seed.cjs"
   },

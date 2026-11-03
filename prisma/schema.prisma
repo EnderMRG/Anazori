@@ -26,6 +26,7 @@ model User {
   preferredLanguage String      @default("en")
   createdAt         DateTime    @default(now())
   complaints        Complaint[]
+  notifications     Notification[]
 }
 
 model Complaint {
@@ -42,12 +43,36 @@ model Complaint {
   status      String   @default("Submitted")
   location    String
   imageUrl    String?
+  resolvedImageUrl String?
+  resolutionNotes  String?
   summaryEn   String
   summaryAs   String
+  tags        String[] @default([])
+  upvotes     Int      @default(1)
+  masterId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  master      Complaint? @relation("ComplaintDuplicates", fields: [masterId], references: [id], onDelete: SetNull)
+  duplicates  Complaint[] @relation("ComplaintDuplicates")
+  notifications Notification[]
 
   @@index([userId, createdAt])
   @@index([status])
+  @@index([campusName, status])
+  @@index([masterId])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  body        String
+  read        Boolean   @default(false)
+  complaintId String?
+  complaint   Complaint? @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, read, createdAt])
 }

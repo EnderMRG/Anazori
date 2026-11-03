@@ -44,12 +44,14 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getCampus, type Campus } from "@/lib/campuses";
 import AdminControlRoom from "@/components/AdminControlRoom";
+import { ComplaintDetailWorkflow, ComplaintFormWorkflow } from "@/components/ComplaintWorkflow";
 
-type Language = "en" | "as";
+export type Language = "en" | "as" | "mixed";
 type View = "overview" | "complaints" | "analytics" | "notifications" | "settings" | "admin";
 export type Status = "Submitted" | "In progress" | "Resolved";
-type Priority = "Critical" | "High" | "Medium" | "Low";
+export type Priority = "Critical" | "High" | "Medium" | "Low";
 type AuthUser = { id: string; name: string; email: string; role: "student" | "admin"; campusName: string };
+type NotificationItem = { id: string | number; title: string; body: string; time: string; unread: boolean; complaintId?: string };
 
 export type Complaint = {
   id: string;
@@ -65,6 +67,11 @@ export type Complaint = {
   location: string;
   createdAt: string;
   image?: string;
+  resolvedImage?: string;
+  resolutionNotes?: string;
+  tags?: string[];
+  upvotes?: number;
+  masterId?: string;
   reporter: string;
   duplicate?: string;
   campusName: string;
@@ -228,12 +235,12 @@ export default function CivicSenseApp() {
   const [toast, setToast] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [notifications, setNotifications] = useState([
+  const [notifications, setNotifications] = useState<NotificationItem[]>([
     { id: 1, title: "Your issue is in progress", body: "CS-2048 was assigned to Maintenance.", time: "18 min ago", unread: true },
     { id: 2, title: "Welcome to CivicSense", body: "You can report campus issues in Assamese or English.", time: "2 hours ago", unread: true },
     { id: 3, title: "Issue resolved", body: "CS-2045 was marked as resolved by Sanitation.", time: "Yesterday", unread: false },
   ]);
-  const t = copy[language];
+  const t = copy[language === "mixed" ? "en" : language];
   const displayName = currentUser?.name || "Arjun";
   const activeCampus = selectedCampus || getCampus(currentUser?.campusName);
   const isAdmin = currentUser?.role === "admin";
@@ -292,6 +299,16 @@ export default function CivicSenseApp() {
       .catch(() => undefined);
   }, [activeCampus.name, currentUser, isProtectedRoute]);
 
+  useEffect(() => {
+    if (!currentUser || currentUser.role === "admin") return;
+    fetch("/api/notifications")
+      .then((response) => response.json())
+      .then((data) => {
+        if (Array.isArray(data.notifications)) setNotifications(data.notifications);
+      })
+      .catch(() => undefined);
+  }, [currentUser]);
+
   const filteredComplaints = useMemo(() => {
     const q = search.trim().toLowerCase();
     return complaints.filter((complaint) => {
@@ -318,10 +335,30 @@ export default function CivicSenseApp() {
     notify(`Complaint ${id} moved to ${status.toLowerCase()}.`);
   }
 
-  function updateComplaint(id: string, updates: Partial<Complaint>) {
+  async function updateComplaint(id: string, updates: Partial<Complaint>) {
+    const previous = complaints.find((item) => item.id === id);
     setComplaints((current) => current.map((item) => item.id === id ? { ...item, ...updates } : item));
     setSelected((current) => current && current.id === id ? { ...current, ...updates } : current);
-    fetch(`/api/complaints/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) }).catch(() => undefined);
+    const response = await fetch(`/api/complaints/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (previous) {
+        setComplaints((current) => current.map((item) => item.id === id ? previous : item));
+        setSelected((current) => current && current.id === id ? previous : current);
+      }
+      notify(data.error || "Unable to update the complaint.");
+      return false;
+    }
+    const data = await response.json();
+    if (data.complaint) {
+      const saved = data.complaint as Complaint;
+      setComplaints((current) => current.map((item) => item.id === id ? { ...item, ...saved, id } : item));
+      setSelected((current) => current && current.id === id ? { ...current, ...saved, id } : current);
+    }
+    if (updates.status) {
+      fetch("/api/notifications").then((result) => result.json()).then((data) => { if (Array.isArray(data.notifications)) setNotifications(data.notifications); }).catch(() => undefined);
+    }
+    return true;
   }
 
   async function addComplaint(complaint: Complaint) {
@@ -342,6 +379,7 @@ export default function CivicSenseApp() {
 
   function markNotificationsRead() {
     setNotifications((current) => current.map((item) => ({ ...item, unread: false })));
+    fetch("/api/notifications", { method: "PATCH" }).catch(() => undefined);
   }
 
   function navTo(nextView: View) {
@@ -451,8 +489,8 @@ export default function CivicSenseApp() {
         </div>
       </main>
 
-      {selected && <ComplaintDetail complaint={selected} language={language} onClose={() => setSelected(null)} onUpdateStatus={updateStatus} role={role} />}
-      {showForm && <ComplaintForm language={language} campus={activeCampus} complaints={complaints.filter((item) => item.campusName === activeCampus.name)} onClose={() => setShowForm(false)} onSubmit={addComplaint} />}
+      {selected && <ComplaintDetailWorkflow complaint={selected} language={language} onClose={() => setSelected(null)} onUpdate={updateComplaint} role={role} />}
+      {showForm && <ComplaintFormWorkflow language={language} campus={activeCampus} onClose={() => setShowForm(false)} onSubmit={addComplaint} />}
       {toast && <div className="toast"><CheckCircle2 size={18} /><span>{toast}</span></div>}
     </div>
   );
@@ -609,7 +647,7 @@ function Analytics({ complaints }: { complaints: Complaint[] }) {
   return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><Lightbulb size={14} /> INSIGHTS</div><h1>Campus insights</h1><p>A clear view of the issues shaping your campus.</p></div><div className="date-chip"><Clock3 size={15} /> Last 30 days <ChevronDown size={14} /></div></section><section className="analytics-grid"><div className="panel chart-panel"><div className="panel-heading"><div><h2>Issue volume</h2><p>Reports received over the past week</p></div><span className="chart-total">{complaints.length}<small>Total reports</small></span></div><div className="bars">{[34, 52, 42, 67, 48, 80, 60].map((height, index) => <div className="bar-column" key={index}><div className="bar-value" style={{ height: `${height}%` }}><span>{Math.round(height / 10)}</span></div><label>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][index]}</label></div>)}</div></div><div className="panel category-panel"><div className="panel-heading"><div><h2>Top categories</h2><p>Where attention is needed</p></div><MoreHorizontal size={19} className="muted-icon" /></div><div className="category-bars">{Object.entries(categoryCounts).slice(0, 5).map(([category, value]) => <div className="category-bar-row" key={category}><div><span>{category}</span><b>{value}</b></div><div className="progress-track"><div style={{ width: `${(value / max) * 100}%` }} /></div></div>)}</div></div></section><section className="insight-cards"><div className="insight-card"><div className="insight-circle insight-green"><CheckCircle2 size={19} /></div><b>Resolution is improving</b><p>Average resolution time is 12% faster than last month.</p></div><div className="insight-card"><div className="insight-circle insight-orange"><AlertCircle size={19} /></div><b>Safety needs attention</b><p>Safety & security reports have increased this week.</p></div><div className="insight-card"><div className="insight-circle insight-blue"><Bot size={19} /></div><b>AI triage is active</b><p>100% of recent reports received an instant AI analysis.</p></div></section></div>;
 }
 
-function Notifications({ notifications, onRead }: { notifications: { id: number; title: string; body: string; time: string; unread: boolean }[]; onRead: () => void }) {
+function Notifications({ notifications, onRead }: { notifications: NotificationItem[]; onRead: () => void }) {
   return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><Bell size={14} /> UPDATES</div><h1>Notifications</h1><p>Stay updated on your reports and campus activity.</p></div><button className="secondary-button" onClick={onRead}><Check size={16} /> Mark all as read</button></section><div className="notification-list">{notifications.map((notification) => <div className={`notification-card ${notification.unread ? "notification-unread" : ""}`} key={notification.id}><div className="notification-icon"><Bell size={18} /></div><div><b>{notification.title}</b><p>{notification.body}</p><span>{notification.time}</span></div>{notification.unread && <span className="unread-dot" />}</div>)}</div></div>;
 }
 
