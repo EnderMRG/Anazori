@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Building2, CheckCircle2, CheckSquare, Clock3, Download, Filter, MapPin, MessageSquareText, RotateCcw, Search, ShieldCheck, Tag, Users } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle2, CheckSquare, Clock3, Download, FileText, Filter, MapPin, MessageSquareText, RotateCcw, Search, ShieldCheck, Tag, Users } from "lucide-react";
+import ApplicationStudio from "@/components/ApplicationStudio";
+import AdminDraftsManager from "@/components/AdminDraftsManager";
 import type { Campus } from "@/lib/campuses";
 import type { Complaint, Language } from "@/components/CivicSenseApp";
 import { AdminSkeleton } from "@/components/SkeletonLoaders";
@@ -12,6 +14,7 @@ type AdminControlRoomProps = {
   loading: boolean;
   onSelect: (complaint: Complaint) => void;
   onUpdateComplaint: (id: string, updates: Partial<Complaint>) => void;
+  onDraftApplication?: (id: string) => void;
   language?: Language;
 };
 
@@ -66,7 +69,7 @@ const categoryTranslations: Record<string, string> = {
   "Other campus issue": "অন্যান্য কেম্পাছ সমস্যা",
 };
 
-export default function AdminControlRoom({ campus, complaints, loading, onSelect, onUpdateComplaint, language = "en" }: AdminControlRoomProps) {
+export default function AdminControlRoom({ campus, complaints, loading, onSelect, onUpdateComplaint, onDraftApplication, language = "en" }: AdminControlRoomProps) {
   const isAs = language === "as";
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
@@ -76,6 +79,8 @@ export default function AdminControlRoom({ campus, complaints, loading, onSelect
   const [queue, setQueue] = useState<"all" | "urgent" | "triage">("all");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showStudio, setShowStudio] = useState(false);
+  const [applicationDraftingId, setApplicationDraftingId] = useState<string | null>(null);
 
   const cleanTag = (tag: string) => tag.replace(/^#+/, "").trim();
   const categories = Array.from(new Set(complaints.map((item) => item.category))).sort();
@@ -290,6 +295,23 @@ export default function AdminControlRoom({ campus, complaints, loading, onSelect
         <button className="admin-export" onClick={exportCsv}>
           <Download size={15} /> {ui.exportCsv}
         </button>
+
+        <button
+          type="button"
+          className="admin-studio-top-btn"
+          title="Open Formal Application Studio"
+          onClick={() => {
+            const targetId = filtered[0]?.id || complaints[0]?.id || "";
+            if (onDraftApplication) {
+              onDraftApplication(targetId);
+            } else {
+              setApplicationDraftingId(targetId);
+              setShowStudio(true);
+            }
+          }}
+        >
+          <FileText size={15} /> <span>{isAs ? "আবেদন ষ্টুডিঅ’" : "Application Studio"}</span>
+        </button>
       </div>
 
       {tags.length > 0 && (
@@ -386,6 +408,23 @@ export default function AdminControlRoom({ campus, complaints, loading, onSelect
               </button>
 
               <div className="admin-report-meta">
+                <button
+                  type="button"
+                  className="admin-draft-app-btn"
+                  title="Draft formal application letter to Vice-Chancellor or campus authorities"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (onDraftApplication) {
+                      onDraftApplication(item.id);
+                    } else {
+                      setApplicationDraftingId(item.id);
+                      setShowStudio(true);
+                    }
+                  }}
+                >
+                  <FileText size={13} />
+                  <span>{isAs ? "আবেদন লিখক" : "Draft Letter"}</span>
+                </button>
                 <span className={`status-pill status-${item.status === "In progress" ? "progress" : item.status.toLowerCase()}`}>
                   <i />{getStatusLabel(item.status)}
                 </span>

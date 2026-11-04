@@ -52,13 +52,14 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useSta
 import { usePathname, useRouter } from "next/navigation";
 import { getCampus, type Campus } from "@/lib/campuses";
 import AdminControlRoom from "@/components/AdminControlRoom";
+import AdminDraftsManager from "@/components/AdminDraftsManager";
 import CampusPulse from "@/components/CampusPulse";
 import { ComplaintDetailWorkflow, ComplaintFormWorkflow } from "@/components/ComplaintWorkflow";
 import PwaInstallButton from "@/components/PwaInstallButton";
 import { NotificationSkeleton, Skeleton, WorkspaceSkeleton } from "@/components/SkeletonLoaders";
 
 export type Language = "en" | "as" | "mixed" | "romanized_as";
-type View = "overview" | "complaints" | "services" | "analytics" | "notifications" | "settings" | "admin";
+type View = "overview" | "complaints" | "services" | "analytics" | "notifications" | "settings" | "admin" | "drafts";
 export type Status = "Submitted" | "In progress" | "Resolved";
 export type Priority = "Critical" | "High" | "Medium" | "Low";
 type AuthUser = { id: string; name: string; email: string; role: "student" | "admin"; campusName: string };
@@ -280,7 +281,8 @@ export default function CivicSenseApp() {
   const isLandingRoute = pathname === "/";
   const isAuthRoute = pathname === "/auth/signin" || pathname === "/auth/signup";
   const isDashboardRoute = pathname === "/dashboard";
-  const isAdminRoute = pathname === "/admin";
+  const isDraftsRoute = pathname === "/admin/drafts";
+  const isAdminRoute = pathname === "/admin" || isDraftsRoute;
   const isProtectedRoute = isDashboardRoute || isAdminRoute;
   const [authMode, setAuthMode] = useState<"signin" | "signup">(pathname === "/auth/signup" ? "signup" : "signin");
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -288,6 +290,7 @@ export default function CivicSenseApp() {
   const [isStandalonePwa, setIsStandalonePwa] = useState<boolean | null>(null);
   const [availableCampuses, setAvailableCampuses] = useState<Campus[]>([]);
   const [selectedCampus, setSelectedCampus] = useState<Campus | null>(null);
+  const [activeDraftComplaintId, setActiveDraftComplaintId] = useState<string | null>(null);
   const [showCampusPicker, setShowCampusPicker] = useState(false);
   const [language, setLanguage] = useState<Language>("en");
   const [view, setView] = useState<View>(() => pathname === "/admin" ? "admin" : "overview");
@@ -354,9 +357,10 @@ export default function CivicSenseApp() {
 
   useEffect(() => {
     if (isAuthRoute) setAuthMode(pathname === "/auth/signup" ? "signup" : "signin");
-    if (isAdminRoute) setView("admin");
+    if (isDraftsRoute) setView("drafts");
+    else if (pathname === "/admin") setView("admin");
     if (isDashboardRoute && currentUser?.role !== "admin") setView("overview");
-  }, [currentUser?.role, isAdminRoute, isAuthRoute, isDashboardRoute, pathname]);
+  }, [currentUser?.role, isAdminRoute, isAuthRoute, isDashboardRoute, isDraftsRoute, pathname]);
 
   useEffect(() => {
     if (!authResolved) return;
@@ -641,7 +645,11 @@ export default function CivicSenseApp() {
           <ChevronDown size={16} className="muted-icon" />
         </div>
           <div className="sidebar-label">{isAdmin ? t.administration : t.workspace}</div>
-        {isAdmin ? <nav className="main-nav admin-nav"><NavButton active={view === "admin"} icon={<ShieldCheck size={18} />} label={t.adminPanel} count={complaints.filter((item) => item.campusName === activeCampus.name && item.status !== "Resolved").length} onClick={() => navTo("admin")} /><NavButton active={view === "analytics"} icon={<Activity size={18} />} label={t.analytics} onClick={() => navTo("analytics")} /></nav> : <nav className="main-nav">
+        {isAdmin ? <nav className="main-nav admin-nav">
+            <NavButton active={view === "admin"} icon={<ShieldCheck size={18} />} label={t.adminPanel} count={complaints.filter((item) => item.campusName === activeCampus.name && item.status !== "Resolved").length} onClick={() => navTo("admin")} />
+            <NavButton active={view === "drafts"} icon={<FileText size={18} />} label={language === "as" ? "আবেদন আৰু খচৰা" : "Formal Drafts"} onClick={() => { setActiveDraftComplaintId(null); navTo("drafts"); }} />
+            <NavButton active={view === "analytics"} icon={<Activity size={18} />} label={t.analytics} onClick={() => navTo("analytics")} />
+          </nav> : <nav className="main-nav">
            <NavButton active={view === "overview"} icon={<LayoutDashboard size={18} />} label={t.overview} onClick={() => navTo("overview")} />
            <NavButton active={view === "complaints"} icon={<MessageSquareText size={18} />} label={t.complaints} count={counts.active} onClick={() => navTo("complaints")} />
            <NavButton active={view === "services"} icon={<BookOpen size={18} />} label={t.services} onClick={() => navTo("services")} />
@@ -677,7 +685,29 @@ export default function CivicSenseApp() {
         </header>
 
         <div className="content-wrap">
-          {view === "admin" && isAdmin && <AdminControlRoom language={language} campus={activeCampus} complaints={complaints.filter((item) => item.campusName === activeCampus.name)} loading={complaintsLoading} onSelect={setSelected} onUpdateComplaint={updateComplaint} />}
+          {view === "admin" && isAdmin && (
+            <AdminControlRoom
+              language={language}
+              campus={activeCampus}
+              complaints={complaints.filter((item) => item.campusName === activeCampus.name)}
+              loading={complaintsLoading}
+              onSelect={setSelected}
+              onUpdateComplaint={updateComplaint}
+              onDraftApplication={(id) => {
+                setActiveDraftComplaintId(id);
+                navTo("drafts");
+              }}
+            />
+          )}
+          {view === "drafts" && isAdmin && (
+            <AdminDraftsManager
+              campus={activeCampus}
+              complaints={complaints.filter((item) => item.campusName === activeCampus.name)}
+              initialComplaintId={activeDraftComplaintId}
+              onBackToControlRoom={() => navTo("admin")}
+              language={language}
+            />
+          )}
           {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} loading={complaintsLoading} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => openForm()} onViewAll={() => navTo("complaints")} onPulse={() => navTo("analytics")} onSelect={setSelected} />}
           {view === "complaints" && <ComplaintsView t={t} complaints={filteredComplaints} loading={complaintsLoading} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onSubmit={() => openForm()} onSelect={setSelected} onUpdateStatus={updateStatus} role={role} />}
           {view === "services" && <StudentServices language={language} onSubmit={openForm} />}
