@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Building2, CheckCircle2, CheckSquare, Clock3, Download, FileText, Filter, MapPin, MessageSquareText, RotateCcw, Search, ShieldCheck, Tag, Users } from "lucide-react";
+import { AlertCircle, Building2, Check, CheckCircle2, CheckSquare, Clock3, Download, FileText, Filter, MapPin, MessageSquareText, RotateCcw, Search, ShieldCheck, Tag, Users } from "lucide-react";
 import ApplicationStudio from "@/components/ApplicationStudio";
 import AdminDraftsManager from "@/components/AdminDraftsManager";
 import type { Campus } from "@/lib/campuses";
@@ -84,6 +84,7 @@ export default function AdminControlRoom({ campus, complaints, loading, onSelect
 
   const cleanTag = (tag: string) => tag.replace(/^#+/, "").trim();
   const categories = Array.from(new Set(complaints.map((item) => item.category))).sort();
+  const departmentsList = Array.from(new Set([...departments, ...complaints.map((item) => item.department).filter(Boolean)])).sort();
   const tags = Array.from(new Set(complaints.flatMap((item) => (item.tags || []).map(cleanTag)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   const openCount = complaints.filter((item) => item.status !== "Resolved").length;
   const urgentCount = complaints.filter((item) => (item.priority === "Critical" || item.priority === "High") && item.status !== "Resolved").length;
@@ -266,7 +267,7 @@ export default function AdminControlRoom({ campus, complaints, loading, onSelect
           <span className="admin-filter-label">{ui.deptLabel}</span>
           <select value={department} onChange={(event) => setDepartment(event.target.value)} title={ui.deptLabel}>
             <option value="All">{ui.allDepartments}</option>
-            {departments.map((item) => (
+            {departmentsList.map((item) => (
               <option key={item} value={item}>
                 {isAs ? departmentTranslations[item] || item : item}
               </option>
@@ -348,7 +349,7 @@ export default function AdminControlRoom({ campus, complaints, loading, onSelect
           <span className="bulk-label">{ui.bulkActions}</span>
           <select defaultValue="" onChange={(event) => { if (event.target.value) bulkUpdate({ department: event.target.value }); }}>
             <option value="" disabled>{ui.assignDeptPlaceholder}</option>
-            {departments.map((item) => (
+            {departmentsList.map((item) => (
               <option key={item} value={item}>
                 {isAs ? departmentTranslations[item] || item : item}
               </option>
@@ -374,12 +375,24 @@ export default function AdminControlRoom({ campus, complaints, loading, onSelect
         {filtered.length ? (
           filtered.map((item) => (
             <div className={`admin-report-row ${selectedIds.includes(item.id) ? "admin-row-selected" : ""}`} key={item.id}>
-              <label className="admin-checkbox">
-                <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggle(item.id)} />
-                <span />
-              </label>
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={selectedIds.includes(item.id)}
+                className={`admin-checkbox-btn ${selectedIds.includes(item.id) ? "checked" : ""}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggle(item.id);
+                }}
+                aria-label={selectedIds.includes(item.id) ? `Deselect ${item.title}` : `Select ${item.title}`}
+              >
+                <span className="admin-checkbox-square">
+                  {selectedIds.includes(item.id) && <Check size={11} strokeWidth={3} />}
+                </span>
+              </button>
 
-              <button onClick={() => onSelect(item)}>
+              <button type="button" className="admin-report-main" onClick={() => onSelect(item)}>
                 <div className={`admin-report-icon priority-${item.priority.toLowerCase()}`}>
                   <MessageSquareText size={17} />
                 </div>
@@ -432,7 +445,7 @@ export default function AdminControlRoom({ campus, complaints, loading, onSelect
                   <span className="priority-dot" />{getPriorityLabel(item.priority)}
                 </span>
                 <select className="row-department" value={item.department} onChange={(event) => onUpdateComplaint(item.id, { department: event.target.value })}>
-                  {departments.map((departmentName) => (
+                  {departmentsList.map((departmentName) => (
                     <option key={departmentName} value={departmentName}>
                       {isAs ? departmentTranslations[departmentName] || departmentName : departmentName}
                     </option>
