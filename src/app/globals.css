@@ -1311,12 +1311,19 @@ img, svg { max-width: 100%; }
 /* Controls: Search, Filters, Sorting */
 .updates-controls-bar {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+
+.updates-controls-bar .updates-search-input {
+  flex: 1 1 280px;
 }
 
 .updates-search-input {
@@ -1980,6 +1987,37 @@ img, svg { max-width: 100%; }
   display: flex;
   align-items: center;
   min-height: 38px;
+}
+
+.map-coords-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.map-hint-sub {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.leaflet-tooltip {
+  background: #0f172a !important;
+  color: #ffffff !important;
+  border: 1px solid #334155 !important;
+  border-radius: 7px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  padding: 4px 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22) !important;
+  white-space: nowrap !important;
+}
+
+.leaflet-tooltip-top:before {
+  border-top-color: #0f172a !important;
 }
 
 .map-coords-badge {

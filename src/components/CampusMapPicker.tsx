@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   ExternalLink,
   Loader2,
@@ -36,7 +36,10 @@ export default function CampusMapPicker({
   const isAssamese = language === "as";
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
+  const leafletRef = useRef<any>(null);
+  const customPinIconRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const accuracyCircleRef = useRef<any>(null);
 
   const [locating, setLocating] = useState(false);
   const [gpsError, setGpsError] = useState("");
@@ -44,12 +47,116 @@ export default function CampusMapPicker({
     latitude && longitude ? { lat: latitude, lng: longitude } : null
   );
 
+  // Helper to place, update or move the draggable pin
+  const placeOrMoveMarker = useCallback(
+    (
+      lat: number,
+      lng: number,
+      options?: {
+        flyTo?: boolean;
+        zoom?: number;
+        isLiveGps?: boolean;
+        accuracy?: number;
+        tooltipText?: string;
+      }
+    ) => {
+      const map = mapInstanceRef.current;
+      const L = leafletRef.current;
+      const pinIcon = customPinIconRef.current;
+      if (!map || !L || !pinIcon) return;
+
+      if (markerRef.current) {
+        markerRef.current.setLatLng([lat, lng]);
+      } else {
+        const marker = L.marker([lat, lng], {
+          icon: pinIcon,
+          draggable: true,
+          autoPan: true,
+        }).addTo(map);
+
+        marker.on("dragstart", () => {
+          if (accuracyCircleRef.current && mapInstanceRef.current) {
+            mapInstanceRef.current.removeLayer(accuracyCircleRef.current);
+            accuracyCircleRef.current = null;
+          }
+          marker.closeTooltip();
+        });
+
+        marker.on("dragend", () => {
+          const pos = marker.getLatLng();
+          const nlat = parseFloat(pos.lat.toFixed(6));
+          const nlng = parseFloat(pos.lng.toFixed(6));
+          setSelectedCoords({ lat: nlat, lng: nlng });
+          onChange({
+            latitude: nlat,
+            longitude: nlng,
+            locationLabel: `Pinned (${nlat.toFixed(4)}° N, ${nlng.toFixed(4)}° E)`,
+          });
+          marker
+            .bindTooltip(
+              isAssamese
+                ? "📍 অৱস্থান আপডেট কৰা হ'ল (স্থান সলাবলৈ আকৌ টানিব পাৰে)"
+                : "📍 Location adjusted (Drag again or tap map)",
+              { permanent: false, direction: "top", offset: [0, -32] }
+            )
+            .openTooltip();
+        });
+
+        markerRef.current = marker;
+      }
+
+      if (options?.isLiveGps) {
+        markerRef.current
+          .bindTooltip(
+            isAssamese
+              ? "📍 লাইভ GPS অৱস্থান (স্থান সলাবলৈ পিন টানক বা মেপত টেপ কৰক)"
+              : "📍 Exact Live Location (Drag pin or tap map to adjust)",
+            { permanent: false, direction: "top", offset: [0, -32] }
+          )
+          .openTooltip();
+
+        if (options.accuracy) {
+          if (accuracyCircleRef.current) {
+            map.removeLayer(accuracyCircleRef.current);
+          }
+          accuracyCircleRef.current = L.circle([lat, lng], {
+            radius: Math.min(Math.max(options.accuracy, 10), 120),
+            color: "#2b8f85",
+            fillColor: "#2b8f85",
+            fillOpacity: 0.12,
+            weight: 1.5,
+            dashArray: "4, 6",
+          }).addTo(map);
+        }
+      } else if (options?.tooltipText) {
+        markerRef.current
+          .bindTooltip(options.tooltipText, {
+            permanent: false,
+            direction: "top",
+            offset: [0, -32],
+          })
+          .openTooltip();
+      }
+
+      if (options?.flyTo) {
+        map.flyTo([lat, lng], options.zoom ?? 18, { duration: 1.2 });
+      }
+    },
+    [isAssamese, onChange]
+  );
+
   // Sync external coords
   useEffect(() => {
     if (latitude && longitude) {
-      setSelectedCoords({ lat: latitude, lng: longitude });
+      setSelectedCoords((prev) => {
+        if (prev?.lat === latitude && prev?.lng === longitude) return prev;
+        return { lat: latitude, lng: longitude };
+      });
+      if (mapInstanceRef.current && leafletRef.current && customPinIconRef.current) {
+        placeOrMoveMarker(latitude, longitude, { flyTo: false });
+      }
     }
-  }, [latitude, longitude]);
+  }, [latitude, longitude, placeOrMoveMarker]);
 
   // Initialize Leaflet Map
   useEffect(() => {
@@ -61,8 +168,16 @@ export default function CampusMapPicker({
       if (!active || !mapContainerRef.current) return;
 
       // Clean up previous instance if any
+      if (accuracyCircleRef.current && mapInstanceRef.current) {
+        try { mapInstanceRef.current.removeLayer(accuracyCircleRef.current); } catch {}
+        accuracyCircleRef.current = null;
+      }
+      if (markerRef.current && mapInstanceRef.current) {
+        try { mapInstanceRef.current.removeLayer(markerRef.current); } catch {}
+        markerRef.current = null;
+      }
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try { mapInstanceRef.current.remove(); } catch {}
         mapInstanceRef.current = null;
       }
 
@@ -76,7 +191,9 @@ export default function CampusMapPicker({
         zoomControl: true,
         attributionControl: false,
       });
+
       mapInstanceRef.current = map;
+      leafletRef.current = L;
 
       // Add OpenStreetMap tiles
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -89,7 +206,7 @@ export default function CampusMapPicker({
         html: `
           <div class="pin-pulse"></div>
           <div class="pin-marker-head">
-            <svg width="22" height="30" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg width="24" height="32" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 0C5.37258 0 0 5.37258 0 12C0 19.5 12 32 12 32C12 32 24 19.5 24 12C24 5.37258 18.6274 0 12 0Z" fill="#2b8f85"/>
               <circle cx="12" cy="12" r="5" fill="#ffffff"/>
             </svg>
@@ -99,47 +216,38 @@ export default function CampusMapPicker({
         iconAnchor: [14, 34],
       });
 
+      customPinIconRef.current = customPinIcon;
+
       // If initial coordinates exist, place the pin
       if (selectedCoords) {
-        const marker = L.marker([selectedCoords.lat, selectedCoords.lng], {
-          icon: customPinIcon,
-          draggable: true,
-        }).addTo(map);
-        markerRef.current = marker;
-
-        marker.on("dragend", () => {
-          const pos = marker.getLatLng();
-          const lat = parseFloat(pos.lat.toFixed(6));
-          const lng = parseFloat(pos.lng.toFixed(6));
-          setSelectedCoords({ lat, lng });
-          onChange({ latitude: lat, longitude: lng });
+        placeOrMoveMarker(selectedCoords.lat, selectedCoords.lng, {
+          flyTo: false,
+          zoom: initialZoom,
         });
       }
 
-      // Map Click to drop / move pin
+      // Map Click to drop / move pin anywhere on campus
       map.on("click", (e: any) => {
         const lat = parseFloat(e.latlng.lat.toFixed(6));
         const lng = parseFloat(e.latlng.lng.toFixed(6));
-        setSelectedCoords({ lat, lng });
-        onChange({ latitude: lat, longitude: lng });
 
-        if (markerRef.current) {
-          markerRef.current.setLatLng([lat, lng]);
-        } else {
-          const marker = L.marker([lat, lng], {
-            icon: customPinIcon,
-            draggable: true,
-          }).addTo(map);
-          markerRef.current = marker;
-
-          marker.on("dragend", () => {
-            const pos = marker.getLatLng();
-            const nlat = parseFloat(pos.lat.toFixed(6));
-            const nlng = parseFloat(pos.lng.toFixed(6));
-            setSelectedCoords({ lat: nlat, lng: nlng });
-            onChange({ latitude: nlat, longitude: nlng });
-          });
+        if (accuracyCircleRef.current) {
+          try { map.removeLayer(accuracyCircleRef.current); } catch {}
+          accuracyCircleRef.current = null;
         }
+
+        setSelectedCoords({ lat, lng });
+        onChange({
+          latitude: lat,
+          longitude: lng,
+          locationLabel: `Pinned (${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E)`,
+        });
+
+        placeOrMoveMarker(lat, lng, {
+          tooltipText: isAssamese
+            ? "📍 পিন বহুওৱা হ'ল (স্থান সলাবলৈ টানক বা মেপত টেপ কৰক)"
+            : "📍 Pin placed (Drag to adjust or tap elsewhere)",
+        });
       });
     }
 
@@ -147,26 +255,29 @@ export default function CampusMapPicker({
 
     return () => {
       active = false;
+      if (accuracyCircleRef.current && mapInstanceRef.current) {
+        try { mapInstanceRef.current.removeLayer(accuracyCircleRef.current); } catch {}
+        accuracyCircleRef.current = null;
+      }
+      if (markerRef.current && mapInstanceRef.current) {
+        try { mapInstanceRef.current.removeLayer(markerRef.current); } catch {}
+        markerRef.current = null;
+      }
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try { mapInstanceRef.current.remove(); } catch {}
         mapInstanceRef.current = null;
       }
     };
-  }, [campus.name]);
-
-  // Move marker and pan when selectedCoords changes
-  useEffect(() => {
-    if (!mapInstanceRef.current || !selectedCoords) return;
-    const map = mapInstanceRef.current;
-    if (markerRef.current) {
-      markerRef.current.setLatLng([selectedCoords.lat, selectedCoords.lng]);
-    }
-  }, [selectedCoords]);
+  }, [campus.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live Location Trigger
   function handleUseLiveLocation() {
-    if (!navigator.geolocation) {
-      setGpsError(isAssamese ? "আপোনাৰ ব্ৰাউজাৰত GPS উপলব্ধ নহয়।" : "Geolocation is not supported by your browser.");
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      setGpsError(
+        isAssamese
+          ? "আপোনাৰ ব্ৰাউজাৰত GPS উপলব্ধ নহয়।"
+          : "Geolocation is not supported by your browser."
+      );
       return;
     }
 
@@ -178,17 +289,22 @@ export default function CampusMapPicker({
         setLocating(false);
         const lat = parseFloat(position.coords.latitude.toFixed(6));
         const lng = parseFloat(position.coords.longitude.toFixed(6));
+        const accuracy = position.coords.accuracy;
 
         setSelectedCoords({ lat, lng });
         onChange({
           latitude: lat,
           longitude: lng,
-          locationLabel: `GPS (${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E)`,
+          locationLabel: `Live GPS (${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E)`,
         });
 
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
-        }
+        // Drop the pin immediately at the exact live location and fly to it
+        placeOrMoveMarker(lat, lng, {
+          flyTo: true,
+          zoom: 18,
+          isLiveGps: true,
+          accuracy,
+        });
       },
       (error) => {
         setLocating(false);
@@ -201,12 +317,12 @@ export default function CampusMapPicker({
         } else {
           setGpsError(
             isAssamese
-              ? "GPS সংকেত পোৱা নগ'ল। মেপত পিন নিৰ্বাচন কৰক।"
+              ? "GPS সংকেত পোৱা নগ'ল। অনুগ্ৰহ কৰি মেপত টেপ কৰি স্থান বাছনি কৰক।"
               : "Unable to retrieve GPS position. Please tap on the map to set location."
           );
         }
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }
 
@@ -214,8 +330,12 @@ export default function CampusMapPicker({
   function handleClearPin() {
     setSelectedCoords(null);
     if (markerRef.current && mapInstanceRef.current) {
-      mapInstanceRef.current.removeLayer(markerRef.current);
+      try { mapInstanceRef.current.removeLayer(markerRef.current); } catch {}
       markerRef.current = null;
+    }
+    if (accuracyCircleRef.current && mapInstanceRef.current) {
+      try { mapInstanceRef.current.removeLayer(accuracyCircleRef.current); } catch {}
+      accuracyCircleRef.current = null;
     }
     if (onClear) onClear();
   }
@@ -255,28 +375,36 @@ export default function CampusMapPicker({
         style={{ height: typeof height === "number" ? `${height}px` : height }}
       />
 
-      {/* Map Footer Bar with Selected Coords or Tap Hint */}
+      {/* Map Footer Bar with Selected Coords & Adjustment Hint */}
       <div className="map-picker-bottom">
         {selectedCoords ? (
-          <div className="map-coords-badge">
-            <MapPin size={12} />
-            <span>
-              {selectedCoords.lat.toFixed(4)}° N, {selectedCoords.lng.toFixed(4)}° E
+          <div className="map-coords-row">
+            <div className="map-coords-badge">
+              <MapPin size={12} />
+              <span>
+                {selectedCoords.lat.toFixed(5)}° N, {selectedCoords.lng.toFixed(5)}° E
+              </span>
+              <button
+                type="button"
+                className="clear-pin-btn"
+                onClick={handleClearPin}
+                title={isAssamese ? "পিন আঁতৰাওক" : "Clear dropped pin"}
+                aria-label="Clear pin"
+              >
+                <X size={12} />
+              </button>
+            </div>
+            <span className="map-hint-sub">
+              {isAssamese
+                ? "💡 স্থান সলাবলৈ পিনটো টানি নিয়ক বা মেপত টেপ কৰক"
+                : "💡 Drag pin or tap anywhere on map to adjust"}
             </span>
-            <button
-              type="button"
-              className="clear-pin-btn"
-              onClick={handleClearPin}
-              title={isAssamese ? "পিন আঁতৰাওক" : "Clear dropped pin"}
-            >
-              <X size={12} />
-            </button>
           </div>
         ) : (
           <span className="map-hint-text">
             {isAssamese
-              ? "মেপত টেপ কৰি সমস্যাৰ সঠিক স্থানত পিন বহুৱাওক"
-              : "Tap anywhere on the map to drop the pin"}
+              ? "মেপত টেপ কৰি বা ওপৰত 'লাইভ অৱস্থান' ক্লিক কৰি পিন বহুৱাওক"
+              : "Tap anywhere on the map or click 'Use My Live Location'"}
           </span>
         )}
       </div>
@@ -315,7 +443,7 @@ export function CampusMapView({
       if (!active || !mapContainerRef.current) return;
 
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try { mapInstanceRef.current.remove(); } catch {}
         mapInstanceRef.current = null;
       }
 
@@ -336,7 +464,7 @@ export function CampusMapView({
         html: `
           <div class="pin-pulse"></div>
           <div class="pin-marker-head">
-            <svg width="22" height="30" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg width="24" height="32" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 0C5.37258 0 0 5.37258 0 12C0 19.5 12 32 12 32C12 32 24 19.5 24 12C24 5.37258 18.6274 0 12 0Z" fill="#2b8f85"/>
               <circle cx="12" cy="12" r="5" fill="#ffffff"/>
             </svg>
@@ -357,14 +485,13 @@ export function CampusMapView({
     return () => {
       active = false;
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try { mapInstanceRef.current.remove(); } catch {}
         mapInstanceRef.current = null;
       }
     };
   }, [latitude, longitude, title, locationName]);
 
   const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-  const osmUrl = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=17/${latitude}/${longitude}`;
 
   return (
     <div className="campus-map-view-card">
@@ -400,4 +527,3 @@ export function CampusMapView({
     </div>
   );
 }
-

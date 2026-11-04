@@ -5,7 +5,6 @@ import {
   Activity,
   AlertCircle,
   ArrowRight,
-  ArrowUpRight,
   Bot,
   Building2,
   Calendar,
@@ -81,12 +80,8 @@ export default function CampusPulse({
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "in_progress" | "resolved" | "submitted">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"upvotes" | "recent" | "priority">("upvotes");
-
-  // Tracked ticket for visual 4-stage stepper
-  const [trackedTicketId, setTrackedTicketId] = useState<string | null>(null);
 
   // Local upvoted set stored in localStorage so users retain their votes across sessions
   const storageKey = `civicsense_upvoted_${campusName.replace(/\s+/g, "_")}`;
@@ -125,13 +120,6 @@ export default function CampusPulse({
     setUpvoteCounts((prev) => ({ ...counts, ...prev }));
   }, [complaints]);
 
-  // Automatically select the first ticket to track if none is selected
-  useEffect(() => {
-    if (!trackedTicketId && complaints.length > 0) {
-      setTrackedTicketId(complaints[0].id);
-    }
-  }, [complaints, trackedTicketId]);
-
   // Handle upvoting
   async function handleUpvoteClick(e: React.MouseEvent, complaintId: string) {
     e.stopPropagation();
@@ -164,34 +152,33 @@ export default function CampusPulse({
       if (onUpvote) {
         await onUpvote(complaintId);
       } else {
-        const res = await fetch(`/api/complaints/${encodeURIComponent(complaintId)}/upvote`, {
+        await fetch(`/api/complaints/${encodeURIComponent(complaintId)}/upvote`, {
           method: "POST",
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (typeof data.upvotes === "number") {
-            setUpvoteCounts((prev) => ({ ...prev, [complaintId]: data.upvotes }));
-          }
-        }
       }
     } catch (err) {
-      console.error("Upvote failed:", err);
+      console.warn("Upvote background error:", err);
     } finally {
       setUpvotingId(null);
     }
   }
 
-  // Ask AI copilot
-  async function handleAskAi(event?: FormEvent) {
-    event?.preventDefault();
+  // Handle Ask AI Copilot
+  async function handleAskAi(e: FormEvent) {
+    e.preventDefault();
     if (!aiQuestion.trim() || aiLoading) return;
+
     setAiLoading(true);
     setAiError("");
     try {
       const response = await fetch("/api/ai/campus-pulse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: aiQuestion }),
+        body: JSON.stringify({
+          question: aiQuestion.trim(),
+          language: isAssamese ? "as" : "en",
+          campusName,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Campus Pulse could not answer right now.");
@@ -207,11 +194,6 @@ export default function CampusPulse({
   const filteredComplaints = useMemo(() => {
     return complaints
       .filter((item) => {
-        // Status filter
-        if (statusFilter === "in_progress" && item.status !== "In progress") return false;
-        if (statusFilter === "resolved" && item.status !== "Resolved") return false;
-        if (statusFilter === "submitted" && item.status !== "Submitted") return false;
-
         // Category filter
         if (categoryFilter !== "all") {
           const cat = (item.category || "").toLowerCase();
@@ -250,18 +232,13 @@ export default function CampusPulse({
         // recent
         return (b.createdAt || "").localeCompare(a.createdAt || "");
       });
-  }, [complaints, statusFilter, categoryFilter, searchQuery, sortBy, upvoteCounts]);
+  }, [complaints, categoryFilter, searchQuery, sortBy, upvoteCounts]);
 
   // Aggregate metrics
   const totalCount = complaints.length;
   const inProgressCount = complaints.filter((c) => c.status === "In progress").length;
   const resolvedCount = complaints.filter((c) => c.status === "Resolved").length;
   const totalUpvotes = complaints.reduce((sum, c) => sum + (upvoteCounts[c.id] ?? c.upvotes ?? 1), 0);
-
-  // Active tracked ticket details
-  const trackedTicket = useMemo(() => {
-    return complaints.find((c) => c.id === trackedTicketId) || complaints[0] || null;
-  }, [complaints, trackedTicketId]);
 
   return (
     <div className="page-enter campus-updates-page">
@@ -299,114 +276,113 @@ export default function CampusPulse({
           <div className="stat-icon-wrap stat-total">
             <Activity size={20} />
           </div>
-          <div className="stat-data">
-            <span className="stat-label">{isAssamese ? "মুঠ কেম্পাছ আপডেট" : "Total Campus Updates"}</span>
+          <div className="stat-info">
+            <span className="stat-label">{isAssamese ? "মুঠ প্ৰতিবেদন" : "Total Updates"}</span>
             <b className="stat-value">{totalCount}</b>
           </div>
-          <div className="stat-sub">{isAssamese ? "সকলো বিভাগৰ ৰিপোৰ্ট" : "Logged across departments"}</div>
         </div>
 
         <div className="update-stat-card">
           <div className="stat-icon-wrap stat-progress">
             <Clock3 size={20} />
           </div>
-          <div className="stat-data">
-            <span className="stat-label">{isAssamese ? "মেরামতি চলি আছে" : "Active Work in Progress"}</span>
+          <div className="stat-info">
+            <span className="stat-label">{isAssamese ? "কাম চলি আছে" : "In Progress"}</span>
             <b className="stat-value">{inProgressCount}</b>
           </div>
-          <div className="stat-sub">{isAssamese ? "কৰ্মী দল নিয়োজিত" : "Crews dispatched on site"}</div>
         </div>
 
         <div className="update-stat-card">
           <div className="stat-icon-wrap stat-resolved">
             <CheckCircle2 size={20} />
           </div>
-          <div className="stat-data">
-            <span className="stat-label">{isAssamese ? "সমাধান হোৱা প্ৰমাণসহ" : "Resolved with Proof"}</span>
+          <div className="stat-info">
+            <span className="stat-label">{isAssamese ? "সমাধান হোৱা" : "Resolved"}</span>
             <b className="stat-value">{resolvedCount}</b>
           </div>
-          <div className="stat-sub">{isAssamese ? "ফটোসহ পৰীক্ষিত" : "Verified with photo evidence"}</div>
         </div>
 
         <div className="update-stat-card">
           <div className="stat-icon-wrap stat-upvotes">
             <Flame size={20} />
           </div>
-          <div className="stat-data">
-            <span className="stat-label">{isAssamese ? "মুঠ ছাত্ৰ সমৰ্থন" : "Community Upvotes"}</span>
+          <div className="stat-info">
+            <span className="stat-label">{isAssamese ? "মুঠ সমৰ্থন (Upvotes)" : "Community Upvotes"}</span>
             <b className="stat-value">{totalUpvotes}</b>
           </div>
-          <div className="stat-sub">{isAssamese ? "অগ্ৰাধিকাৰ নিৰ্ণায়ক ভোট" : "Student voices elevating issues"}</div>
         </div>
       </section>
 
-      {/* Collapsible AI Copilot Panel */}
+      {/* Campus Pulse AI Assistant Dropdown */}
       {showAiCopilot && (
-        <section className="panel pulse-chat-panel copilot-drawer page-enter">
-          <div className="pulse-intro">
-            <div className="pulse-icon">
-              <Sparkles size={20} />
+        <section className="panel pulse-ai-panel">
+          <div className="pulse-ai-head">
+            <div className="pulse-ai-title">
+              <Bot size={18} />
+              <b>{isAssamese ? "কেম্পাছ পালছ এআই সহায়ক" : "Campus Pulse AI Intelligence"}</b>
             </div>
-            <div>
-              <h2>{isAssamese ? "কেম্পাছৰ বিষয়ে AI ক সুধক" : "Campus Report Copilot"}</h2>
-              <p>
-                {isAssamese
-                  ? "কেম্পাছৰ শেহতীয়া ৰিপোৰ্ট আৰু সমস্যাৰ ধৰণৰ ওপৰত ভিত্তি কৰি AI ৰ পৰা তাৎক্ষণিক তথ্য লাভ কৰক।"
-                  : "Ask grounded questions about patterns, frequent maintenance hotspots, or unresolved issues."}
-              </p>
-            </div>
+            <span className="pulse-ai-badge">
+              <Zap size={13} /> {isAssamese ? "লাইভ অন্তৰ্দৃষ্টি" : "Live Grounded"}
+            </span>
           </div>
-          <form className="pulse-question-form" onSubmit={(event) => void handleAskAi(event)}>
-            <label className="sr-only" htmlFor="campus-pulse-question">
-              Ask Campus Pulse
-            </label>
-            <textarea
-              id="campus-pulse-question"
-              value={aiQuestion}
-              onChange={(event) => setAiQuestion(event.target.value)}
-              maxLength={300}
-              rows={2}
-              placeholder={
-                isAssamese
-                  ? "যেনে: ছাত্ৰাবাসসমূহত পানীৰ সমস্যাৰ কিমানটা ৰিপোৰ্ট জমা হৈছে?"
-                  : "e.g. Which unresolved issues need immediate attention in hostels?"
-              }
-            />
-            <button className="primary-button" disabled={aiLoading || !aiQuestion.trim()}>
-              {aiLoading ? (
-                <>
-                  <Loader2 size={16} className="spin" /> {isAssamese ? "তথ্য বিশ্লেষণ হৈ আছে..." : "Analyzing reports..."}
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} /> {isAssamese ? "সুধক" : "Ask Copilot"}
-                </>
-              )}
-            </button>
-          </form>
-          <div className="pulse-suggestions">
-            <span>{isAssamese ? "প্ৰস্তাৱিত প্ৰশ্ন:" : "Try asking:"}</span>
-            {suggestedQuestions.map((item) => (
+
+          <form onSubmit={handleAskAi} className="pulse-ai-form">
+            <div className="pulse-ai-input-wrap">
+              <input
+                type="text"
+                value={aiQuestion}
+                onChange={(e) => setAiQuestion(e.target.value)}
+                placeholder={
+                  isAssamese
+                    ? "কেম্পাছৰ সমস্যাৰ বিষয়ে যিকোনো কথা সোধক..."
+                    : "Ask anything about campus issues, water leaks, repairs, or student votes..."
+                }
+                disabled={aiLoading}
+              />
               <button
-                key={item}
+                type="submit"
+                className="primary-button pulse-ai-submit"
+                disabled={aiLoading || !aiQuestion.trim()}
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader2 size={15} className="spin" />
+                    <span>{isAssamese ? "বিশ্লেষণ হৈ আছে..." : "Analyzing..."}</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={15} />
+                    <span>{isAssamese ? "উত্তৰ দিয়ক" : "Ask"}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+
+          {/* Quick Prompts */}
+          <div className="pulse-ai-chips">
+            <span className="chip-label">{isAssamese ? "প্ৰস্তাৱিত প্ৰশ্নসমূহ:" : "Suggested questions:"}</span>
+            {suggestedQuestions.map((q, idx) => (
+              <button
                 type="button"
+                key={idx}
+                className="ai-chip-btn"
                 onClick={() => {
-                  setAiQuestion(item);
-                  setAiError("");
+                  setAiQuestion(q);
                 }}
               >
-                {item}
-                <ArrowUpRight size={13} />
+                {q}
               </button>
             ))}
           </div>
-          {aiError && <div className="duplicate-alert">{aiError}</div>}
+
+          {/* AI Response Display */}
+          {aiError && <div className="pulse-ai-error">{aiError}</div>}
+
           {aiResult && (
-            <div className="pulse-answer" aria-live="polite">
-              <div className="pulse-answer-heading">
-                <b>
-                  <Sparkles size={15} /> {isAssamese ? "AI বিশ্লেষণ উত্তৰ" : "AI Answer"}
-                </b>
+            <div className="pulse-ai-response">
+              <div className="response-header">
+                <Sparkles size={15} />
                 <span>{aiResult.provider === "gemini" ? "Gemini · Live report grounded" : "Campus summary"}</span>
               </div>
               <p>{aiResult.answer}</p>
@@ -415,51 +391,6 @@ export default function CampusPulse({
               </div>
             </div>
           )}
-        </section>
-      )}
-
-      {/* 4-Stage Interactive Ticket Progress Stepper */}
-      {trackedTicket && (
-        <section className="panel ticket-tracker-panel">
-          <div className="tracker-header">
-            <div className="tracker-title-col">
-              <div className="tracker-kicker">
-                <Activity size={15} />
-                <span>{isAssamese ? "৪-স্তৰীয় প্ৰগতি ট্ৰেকাৰ" : "4-STAGE RESOLUTION TRACKER"}</span>
-                <span className="tracker-ticket-chip">{trackedTicket.id}</span>
-              </div>
-              <h3>{trackedTicket.title}</h3>
-              <div className="tracker-submeta">
-                <span>
-                  <MapPin size={13} /> {trackedTicket.location}
-                </span>
-                <span>•</span>
-                <span>
-                  <Building2 size={13} /> {trackedTicket.department}
-                </span>
-                <span>•</span>
-                <span>
-                  <Calendar size={13} /> {trackedTicket.createdAt}
-                </span>
-              </div>
-            </div>
-
-            <div className="tracker-action-col">
-              <button
-                type="button"
-                className="secondary-button view-ticket-btn"
-                onClick={() => onSelect && onSelect(trackedTicket)}
-              >
-                <Eye size={15} />
-                <span>{isAssamese ? "সম্পূৰ্ণ বিৱৰণ খোলক" : "Inspect Full Details"}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Stepper Steps */}
-          <div className="stepper-track-wrap">
-            <TicketStepper status={trackedTicket.status} isAssamese={isAssamese} />
-          </div>
         </section>
       )}
 
@@ -488,42 +419,6 @@ export default function CampusPulse({
               <X size={14} />
             </button>
           )}
-        </div>
-
-        {/* Status Filters */}
-        <div className="updates-filter-tabs">
-          <button
-            type="button"
-            className={`filter-tab ${statusFilter === "all" ? "active" : ""}`}
-            onClick={() => setStatusFilter("all")}
-          >
-            {isAssamese ? "সকলো আপডেট" : "All Updates"} ({complaints.length})
-          </button>
-          <button
-            type="button"
-            className={`filter-tab ${statusFilter === "in_progress" ? "active" : ""}`}
-            onClick={() => setStatusFilter("in_progress")}
-          >
-            <Clock3 size={13} />
-            {isAssamese ? "কাম চলি আছে" : "In Progress"} ({inProgressCount})
-          </button>
-          <button
-            type="button"
-            className={`filter-tab ${statusFilter === "resolved" ? "active" : ""}`}
-            onClick={() => setStatusFilter("resolved")}
-          >
-            <CheckCircle2 size={13} />
-            {isAssamese ? "সমাধান হোৱা প্ৰমাণসহ" : "Resolved Proof"} ({resolvedCount})
-          </button>
-          <button
-            type="button"
-            className={`filter-tab ${statusFilter === "submitted" ? "active" : ""}`}
-            onClick={() => setStatusFilter("submitted")}
-          >
-            <Sparkles size={13} />
-            {isAssamese ? "নতুন / AI পৰ্যালোচিত" : "AI Triaged"} (
-            {complaints.filter((c) => c.status === "Submitted").length})
-          </button>
         </div>
 
         {/* Categories & Sort */}
@@ -570,14 +465,13 @@ export default function CampusPulse({
             <p>
               {isAssamese
                 ? "আপোনাৰ সন্ধান বা ফিল্টাৰ সলনি কৰি চাওক অথবা আন বিভাগ বাছনি কৰক।"
-                : "Try resetting your search query or selecting a different status/category filter."}
+                : "Try resetting your search query or selecting a different category filter."}
             </p>
             <button
               type="button"
               className="secondary-button"
               onClick={() => {
                 setSearchQuery("");
-                setStatusFilter("all");
                 setCategoryFilter("all");
               }}
             >
@@ -588,14 +482,13 @@ export default function CampusPulse({
           filteredComplaints.map((item) => {
             const upvotes = upvoteCounts[item.id] ?? item.upvotes ?? 1;
             const hasUpvoted = upvotedIds.has(item.id);
-            const isTracked = trackedTicketId === item.id;
             const hasBeforePhoto = Boolean(item.image);
             const hasAfterPhoto = Boolean(item.resolvedImage);
 
             return (
               <article
                 key={item.id}
-                className={`panel update-card ${isTracked ? "card-highlighted" : ""}`}
+                className="panel update-card"
                 onClick={() => onSelect && onSelect(item)}
               >
                 {/* Card Top Row */}
@@ -650,14 +543,10 @@ export default function CampusPulse({
                             })
                           }
                         >
-                          <div className="photo-label">
-                            <Camera size={12} />
-                            <span>{isAssamese ? "সমস্যাৰ ফটো (Before)" : "Before Issue"}</span>
+                          <div className="photo-badge before-badge">
+                            <Camera size={11} /> {isAssamese ? "আগতে (Before)" : "Before Issue"}
                           </div>
-                          <img src={item.image} alt="Before issue" loading="lazy" />
-                          <div className="photo-zoom-hint">
-                            <Eye size={13} />
-                          </div>
+                          <img src={item.image} alt="Before evidence" loading="lazy" />
                         </div>
                       )}
                       {hasAfterPhoto && (
@@ -666,77 +555,52 @@ export default function CampusPulse({
                           onClick={() =>
                             setPreviewImage({
                               url: item.resolvedImage!,
-                              caption: `${item.id} · Resolution Proof (Verified)`,
+                              caption: `${item.id} · Resolution Proof (Verified by Admin)`,
                             })
                           }
                         >
-                          <div className="photo-label verified-label">
-                            <CheckCircle2 size={12} />
-                            <span>{isAssamese ? "সমাধানৰ প্ৰমাণ (Verified Proof)" : "Resolution Proof"}</span>
+                          <div className="photo-badge after-badge">
+                            <CheckCircle2 size={11} /> {isAssamese ? "সমাধান (Resolved)" : "Verified Proof"}
                           </div>
                           <img src={item.resolvedImage} alt="Resolution proof" loading="lazy" />
-                          <div className="photo-zoom-hint">
-                            <Eye size={13} />
-                          </div>
                         </div>
                       )}
                     </div>
                   ) : hasBeforePhoto ? (
                     <div
-                      className="photo-box single-photo"
+                      className="single-photo-box"
                       onClick={() =>
                         setPreviewImage({
                           url: item.image!,
-                          caption: `${item.id} · Attached Evidence Photo`,
+                          caption: `${item.id} · Reported Evidence Photo`,
                         })
                       }
                     >
-                      <div className="photo-label">
-                        <Camera size={12} />
-                        <span>{isAssamese ? "সংলগ্ন প্ৰমাণ ফটো" : "Reported Evidence Photo"}</span>
+                      <div className="photo-badge before-badge">
+                        <Camera size={11} /> {isAssamese ? "প্ৰমাণ চিত্ৰ" : "Attached Photo"}
                       </div>
-                      <img src={item.image} alt="Report evidence" loading="lazy" />
-                      <div className="photo-zoom-hint">
-                        <Eye size={13} />
-                      </div>
+                      <img src={item.image} alt="Attached complaint evidence" loading="lazy" />
                     </div>
-                  ) : (
-                    <div className="photo-placeholder-box">
-                      <div className="placeholder-content">
-                        <Building2 size={24} className="placeholder-icon" />
-                        <div>
-                          <b>{item.category || "Campus Maintenance"}</b>
-                          <span>{item.department || "Campus Estate"}</span>
-                        </div>
-                      </div>
-                      <span className="placeholder-tag">
-                        <MapPin size={12} /> {item.location}
-                      </span>
-                    </div>
-                  )}
+                  ) : null}
                 </div>
 
-                {/* Location and Department Meta */}
-                <div className="update-meta-row">
-                  <span className="meta-tag">
+                {/* Meta details footer line */}
+                <div className="card-meta-row">
+                  <div className="card-meta-item">
                     <MapPin size={13} />
-                    <b>{item.location}</b>
-                  </span>
-                  <span className="meta-tag">
+                    <span>{item.location}</span>
+                  </div>
+                  <div className="card-meta-item">
                     <Building2 size={13} />
-                    {item.department}
-                  </span>
-                  <span className="meta-tag">
-                    <Tag size={13} />
-                    {item.category}
-                  </span>
-                  <span className="meta-reporter">
+                    <span>{item.department}</span>
+                  </div>
+                  <div className="card-meta-item">
                     <UserRound size={13} />
-                    {item.reporter}
-                  </span>
+                    <span>{item.reporter}</span>
+                  </div>
                 </div>
 
-                {/* Campus Administration Response or Notes */}
+                {/* Official Department Update if available */}
                 {(item.adminResponseEn || item.adminResponseAs || item.resolutionNotes) && (
                   <div className="admin-response-callout">
                     <div className="callout-head">
@@ -751,7 +615,7 @@ export default function CampusPulse({
                   </div>
                 )}
 
-                {/* Bottom Actions: Upvote Button & Track Stepper Button */}
+                {/* Bottom Actions: Upvote Button & Inspect Details */}
                 <div className="card-actions-row" onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
@@ -789,19 +653,11 @@ export default function CampusPulse({
                   <div className="card-actions-right">
                     <button
                       type="button"
-                      className={`track-action-btn ${isTracked ? "active-tracked" : ""}`}
-                      onClick={() => setTrackedTicketId(item.id)}
-                    >
-                      <Activity size={14} />
-                      <span>{isTracked ? (isAssamese ? "ট্ৰেক হৈ আছে" : "Tracking") : isAssamese ? "ট্ৰেক কৰক" : "Track Progress"}</span>
-                    </button>
-
-                    <button
-                      type="button"
                       className="details-action-btn"
                       onClick={() => onSelect && onSelect(item)}
                     >
-                      <span>{isAssamese ? "বিৱৰণ" : "Details"}</span>
+                      <Eye size={14} />
+                      <span>{isAssamese ? "বিৱৰণ চাওক" : "Inspect Details"}</span>
                       <ArrowRight size={14} />
                     </button>
                   </div>
@@ -812,98 +668,38 @@ export default function CampusPulse({
         )}
       </section>
 
-      {/* Lightbox Image Preview Modal */}
+      {/* Image Lightbox Modal */}
       {previewImage && (
-        <div
-          className="modal-backdrop photo-lightbox-backdrop"
-          onClick={() => setPreviewImage(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="photo-lightbox-card" onClick={(e) => e.stopPropagation()}>
-            <div className="lightbox-top">
-              <b>{previewImage.caption}</b>
+        <div className="modal-backdrop pulse-lightbox" onClick={() => setPreviewImage(null)}>
+          <div className="lightbox-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="lightbox-header">
+              <span>{previewImage.caption}</span>
               <button
                 type="button"
-                className="icon-button"
+                className="icon-button close-lightbox-btn"
                 onClick={() => setPreviewImage(null)}
-                aria-label="Close"
+                aria-label="Close photo preview"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
             <div className="lightbox-image-wrap">
-              <img src={previewImage.url} alt={previewImage.caption} />
+              <img src={previewImage.url} alt="Expanded preview" />
+            </div>
+            <div className="lightbox-footer">
+              <a
+                href={previewImage.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="secondary-button"
+              >
+                <ExternalLink size={14} />
+                <span>Open original in new tab</span>
+              </a>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// 4-Stage Stepper Component
-function TicketStepper({ status, isAssamese }: { status: Status; isAssamese: boolean }) {
-  const currentStep = status === "Resolved" ? 4 : status === "In progress" ? 3 : 2;
-
-  const steps = [
-    {
-      num: 1,
-      titleEn: "Report Logged",
-      titleAs: "ৰিপোৰ্ট দাখিল",
-      descEn: "Student submission recorded",
-      descAs: "ছাত্ৰ-ছাত্ৰীৰ ৰিপোৰ্ট নথিভুক্ত",
-    },
-    {
-      num: 2,
-      titleEn: "AI Triaged",
-      titleAs: "AI বিশ্লেষণ",
-      descEn: "Gemini priority & tag review",
-      descAs: "Gemini দ্বাৰা অগ্ৰাধিকাৰ নিৰ্ধাৰণ",
-    },
-    {
-      num: 3,
-      titleEn: "Dispatched",
-      titleAs: "কৰ্মী দল প্ৰেৰণ",
-      descEn: "Assigned to department crew",
-      descAs: "বিভাগীয় কৰ্মী দলক নিৰ্দেশ",
-    },
-    {
-      num: 4,
-      titleEn: "Resolved & Verified",
-      titleAs: "সমাধান আৰু পৰীক্ষিত",
-      descEn: "Photo proof verified",
-      descAs: "ফটো প্ৰমাণসহ পৰীক্ষিত",
-    },
-  ];
-
-  return (
-    <div className="stepper-container">
-      <div className="stepper-line" />
-      <div
-        className="stepper-line-progress"
-        style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
-      />
-      <div className="stepper-steps">
-        {steps.map((step) => {
-          const isDone = currentStep > step.num;
-          const isActive = currentStep === step.num;
-          return (
-            <div
-              key={step.num}
-              className={`stepper-node ${isDone ? "step-done" : isActive ? "step-active" : "step-pending"}`}
-            >
-              <div className="step-circle">
-                {isDone ? <Check size={14} /> : <span>{step.num}</span>}
-              </div>
-              <div className="step-label-group">
-                <b className="step-title">{isAssamese ? step.titleAs : step.titleEn}</b>
-                <span className="step-desc">{isAssamese ? step.descAs : step.descEn}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
