@@ -43,7 +43,7 @@ type SpeechRecognitionWindow = Window & {
 };
 
 // Client-side image compression: reduces 3MB-10MB mobile photos down to ~80KB in 50ms
-async function compressImageFile(file: File, maxDim = 1200, quality = 0.82): Promise<string> {
+async function compressImageFile(file: File, maxDim = 800, quality = 0.72): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     if (file.type === "image/svg+xml") {
       const reader = new FileReader();

@@ -292,8 +292,19 @@ export default function CivicSenseApp() {
   const [language, setLanguage] = useState<Language>("en");
   const [view, setView] = useState<View>(() => pathname === "/admin" ? "admin" : "overview");
   const [role, setRole] = useState<"student" | "admin">("student");
-  const [complaints, setComplaints] = useState(initialComplaints);
-  const [complaintsLoading, setComplaintsLoading] = useState(true);
+  const [complaints, setComplaints] = useState<Complaint[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("civicsense_cached_complaints");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return initialComplaints;
+  });
+  const [complaintsLoading, setComplaintsLoading] = useState(false);
   const [complaintsCursor, setComplaintsCursor] = useState<string | null>(null);
   const [hasMoreComplaints, setHasMoreComplaints] = useState(false);
   const [loadingMoreComplaints, setLoadingMoreComplaints] = useState(false);
@@ -372,14 +383,14 @@ export default function CivicSenseApp() {
   }, [authResolved, currentUser, isAdminRoute, isAuthRoute, isDashboardRoute, isLandingRoute, isProtectedRoute, isStandalonePwa, router]);
 
   useEffect(() => {
-    if (!isProtectedRoute || !currentUser) return;
+    if (!isProtectedRoute) return;
     loadMoreController.current?.abort();
     setLoadingMoreComplaints(false);
     setComplaintsLoading(true);
     setComplaintsCursor(null);
     setHasMoreComplaints(false);
     const controller = new AbortController();
-    const params = new URLSearchParams({ limit: "25", includeEvidence: "true" });
+    const params = new URLSearchParams({ limit: "25" });
     if (search.trim()) params.set("search", search.trim());
     if (statusFilter !== "All") params.set("status", statusFilter);
     const debounceMs = search.trim() ? 250 : 0;
@@ -391,7 +402,12 @@ export default function CivicSenseApp() {
           return data;
         })
         .then((data) => {
-          setComplaints(Array.isArray(data.complaints) ? data.complaints : []);
+          if (Array.isArray(data.complaints)) {
+            setComplaints(data.complaints);
+            try {
+              localStorage.setItem("civicsense_cached_complaints", JSON.stringify(data.complaints.slice(0, 30)));
+            } catch {}
+          }
           setComplaintsCursor(typeof data.nextCursor === "string" ? data.nextCursor : null);
           setHasMoreComplaints(Boolean(data.hasMore));
         })
@@ -415,7 +431,7 @@ export default function CivicSenseApp() {
     const controller = new AbortController();
     loadMoreController.current = controller;
     try {
-      const params = new URLSearchParams({ limit: "25", cursor: complaintsCursor, includeEvidence: "true" });
+      const params = new URLSearchParams({ limit: "25", cursor: complaintsCursor });
       if (search.trim()) params.set("search", search.trim());
       if (statusFilter !== "All") params.set("status", statusFilter);
       const response = await fetch(`/api/complaints?${params.toString()}`, { signal: controller.signal });
@@ -1794,7 +1810,7 @@ function StudentServices({ language = "en", onSubmit }: { language?: Language; o
 }
 
 function Overview({ t, language, userName, campus, complaints, loading, counts, onSubmit, onViewAll, onPulse, onSelect }: { t: typeof copy.en; language: Language; userName: string; campus: Campus; complaints: Complaint[]; loading: boolean; counts: { active: number; resolved: number; unread: number }; onSubmit: () => void; onViewAll: () => void; onPulse: () => void; onSelect: (complaint: Complaint) => void }) {
-  if (loading) return <WorkspaceSkeleton />;
+  if (loading && complaints.length === 0) return <WorkspaceSkeleton />;
   return <div className="page-enter">
     <section className="hero-row">
       <div><div className="eyebrow"><span className="eyebrow-dot" /> {campus.name}</div><h1>{language === "as" ? `সুপ্ৰভাত, ${userName}` : `Good morning, ${userName}`}</h1><p>{t.intro}</p></div>
@@ -1836,7 +1852,7 @@ function SkeletonListPlaceholder() {
 }
 
 function ComplaintsView({ t, complaints, loading, search, setSearch, statusFilter, setStatusFilter, onSubmit, onSelect, onUpdateStatus, role }: { t: typeof copy.en; complaints: Complaint[]; loading: boolean; search: string; setSearch: (value: string) => void; statusFilter: string; setStatusFilter: (value: string) => void; onSubmit: () => void; onSelect: (complaint: Complaint) => void; onUpdateStatus: (id: string, status: Status) => void; role: "student" | "admin" }) {
-  if (loading) return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><MessageSquareText size={14} /> ISSUE MANAGEMENT</div><h1>{t.complaints}</h1><p>Track, manage and resolve reported campus issues.</p></div></section><div className="panel skeleton-panel"><SkeletonListPlaceholder /></div></div>;
+  if (loading && complaints.length === 0) return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><MessageSquareText size={14} /> ISSUE MANAGEMENT</div><h1>{t.complaints}</h1><p>Track, manage and resolve reported campus issues.</p></div></section><div className="panel skeleton-panel"><SkeletonListPlaceholder /></div></div>;
   return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><MessageSquareText size={14} /> ISSUE MANAGEMENT</div><h1>{t.complaints}</h1><p>Track, manage and resolve reported campus issues.</p></div><button className="primary-button" onClick={onSubmit}><Plus size={18} />{t.newReport}</button></section>
     <div className="toolbar"><div className="search-box"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.search} /></div><div className="filter-wrap"><Filter size={16} /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="All">{t.all}</option><option value="Submitted">Submitted</option><option value="In progress">In progress</option><option value="Resolved">Resolved</option></select></div><button className="filter-button"><Tag size={16} />Category <ChevronDown size={14} /></button></div>
     <div className="list-panel"><div className="list-header"><span>{complaints.length} reports</span><span className="list-header-right"><span className="legend-dot legend-orange" /> Needs attention <span className="legend-dot legend-green" /> Resolved</span></div>{complaints.length ? complaints.map((complaint) => <div className="manage-row" key={complaint.id}><ComplaintRow complaint={complaint} language="en" onClick={() => onSelect(complaint)} /><div className="manage-actions"><span className="priority"><span className={`priority-dot priority-${complaint.priority.toLowerCase()}`} />{complaint.priority}</span>{role === "admin" && complaint.status !== "Resolved" && <button className="small-button" onClick={() => onUpdateStatus(complaint.id, complaint.status === "Submitted" ? "In progress" : "Resolved")}>{complaint.status === "Submitted" ? "Assign" : "Resolve"}</button>}</div></div>) : <div className="empty-state"><Search size={24} /><b>{t.noComplaints}</b><span>Try changing your search or filter.</span></div>}</div>

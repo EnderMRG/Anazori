@@ -4,6 +4,7 @@ import { isEvidenceDataUrl } from "@/lib/evidence";
 import { prisma } from "@/lib/prisma";
 import { isRateLimited } from "@/lib/redis";
 import { verifyResolutionToken } from "@/lib/resolution-token";
+import { invalidateComplaintsCache } from "@/lib/complaints-cache";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -66,6 +67,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
     return updated;
   });
+
+  // Invalidate list cache so changes reflect instantly
+  invalidateComplaintsCache(session.campusName);
+
   const { imageUrl: _imageUrl, resolvedImageUrl: _resolvedImageUrl, ...savedComplaint } = complaint;
   return NextResponse.json({ complaint: {
     ...savedComplaint,

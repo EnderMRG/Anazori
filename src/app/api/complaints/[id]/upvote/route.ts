@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isRateLimited } from "@/lib/redis";
 import { escalatedPriority, type IssuePriority } from "@/lib/issue-analysis";
+import { invalidateComplaintsCache } from "@/lib/complaints-cache";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -85,6 +86,8 @@ export async function POST(request: Request, context: RouteContext) {
     return item;
   });
 
+  invalidateComplaintsCache(session.campusName);
+
   return NextResponse.json({
     success: true,
     id: updated.publicId,
@@ -155,6 +158,8 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
     return item;
   });
+
+  invalidateComplaintsCache(session.campusName);
 
   return NextResponse.json({
     success: true,
