@@ -42,6 +42,8 @@ model Complaint {
   department  String
   status      String   @default("Submitted")
   location    String
+  latitude    Float?
+  longitude   Float?
   imageUrl    String?
   resolvedImageUrl String?
   resolutionNotes  String?

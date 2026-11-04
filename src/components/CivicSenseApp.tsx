@@ -76,6 +76,8 @@ export type Complaint = {
   summaryAs: string;
   status: Status;
   location: string;
+  latitude?: number;
+  longitude?: number;
   createdAt: string;
   image?: string;
   resolvedImage?: string;
@@ -112,6 +114,8 @@ const initialComplaints: Complaint[] = [
     summaryAs: "পুৱাৰে পৰা ছাত্ৰাবাসৰ C ব্লকত পানীৰ যোগান বন্ধ হৈ আছে, যাৰ ফলত আৱাসীসকল অসুবিধাত পৰিছে।",
     status: "In progress",
     location: "Hostel block C",
+    latitude: 27.4526,
+    longitude: 94.8962,
     createdAt: "Today, 09:42 AM",
     reporter: "Arjun",
     campusName: "Dibrugarh University",
@@ -132,6 +136,8 @@ const initialComplaints: Complaint[] = [
     summaryAs: "যোৱা দুদিন ধৰি লাইব্ৰেৰীৰ দ্বিতীয় মহলাত ৱাই-ফাই সংযোগ পোৱা হোৱা নাই।",
     status: "Submitted",
     location: "Central Library",
+    latitude: 27.4542,
+    longitude: 94.8980,
     createdAt: "Today, 08:18 AM",
     reporter: "Rituraj Gogoi",
     campusName: "Dibrugarh University",
@@ -149,6 +155,8 @@ const initialComplaints: Complaint[] = [
     summaryAs: "উত্তৰ প্ৰৱেশদ্বাৰৰ ওচৰৰ বেয়া ষ্ট্ৰীট লাইটটোৱে সূৰ্যাস্তৰ পিছত সুৰক্ষাৰ আশংকা সৃষ্টি কৰিছে।",
     status: "Submitted",
     location: "North gate",
+    latitude: 27.4568,
+    longitude: 94.8955,
     createdAt: "Yesterday, 06:31 PM",
     reporter: "Bikram Saikia",
     campusName: "Dibrugarh University",
@@ -167,6 +175,8 @@ const initialComplaints: Complaint[] = [
     summaryAs: "কলাৰ ভৱনৰ ওচৰৰ আৱৰ্জনাৰ বাকচবোৰ উপচি পৰিছিল; সমস্যাটো সমাধান কৰা হৈছে।",
     status: "Resolved",
     location: "Arts building",
+    latitude: 27.4535,
+    longitude: 94.8992,
     createdAt: "Yesterday, 02:10 PM",
     reporter: "Priyanka Chetia",
     campusName: "Dibrugarh University",

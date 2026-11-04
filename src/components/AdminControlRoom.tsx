@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Building2, CheckCircle2, CheckSquare, Clock3, Download, Filter, MessageSquareText, RotateCcw, Search, ShieldCheck, Tag, Users } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle2, CheckSquare, Clock3, Download, Filter, MapPin, MessageSquareText, RotateCcw, Search, ShieldCheck, Tag, Users } from "lucide-react";
 import type { Campus } from "@/lib/campuses";
 import type { Complaint, Language } from "@/components/CivicSenseApp";
 import { AdminSkeleton } from "@/components/SkeletonLoaders";
@@ -363,7 +363,14 @@ export default function AdminControlRoom({ campus, complaints, loading, onSelect
                 </div>
                 <div>
                   <b>{item.title}</b>
-                  <span>{item.id} · {item.reporter} · {item.location}</span>
+                  <span className="admin-row-subline">
+                    {item.id} · {item.reporter} · {item.location}
+                    {typeof item.latitude === "number" && typeof item.longitude === "number" && (
+                      <span className="gps-pill" title={`${item.latitude.toFixed(4)}° N, ${item.longitude.toFixed(4)}° E`}>
+                        <MapPin size={10} /> {isAs ? "মেপত পিন কৰা" : "Geotagged"}
+                      </span>
+                    )}
+                  </span>
                   <small>
                     {isAs && categoryTranslations[item.category] ? `${categoryTranslations[item.category]} (${item.category})` : item.category} · {isAs ? (departmentTranslations[item.department] || item.department) : item.department}
                   </small>

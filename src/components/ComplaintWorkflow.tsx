@@ -4,6 +4,7 @@ import { AlertCircle, Building2, Camera, Check, CheckCircle2, CopyCheck, FolderO
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import type { Campus } from "@/lib/campuses";
 import type { Complaint, Language, Priority, Status } from "@/components/CivicSenseApp";
+import CampusMapPicker, { CampusMapView } from "@/components/CampusMapPicker";
 
 type ComplaintUpdate = Partial<Complaint>;
 type UpdateComplaint = (id: string, updates: ComplaintUpdate & { resolutionVerificationToken?: string }) => Promise<boolean>;
@@ -124,6 +125,8 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState(serviceCategory ? "Student Services" : "");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const [selectedService, setSelectedService] = useState(serviceCategory || studentServiceOptions[0].label);
   const [image, setImage] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -302,6 +305,8 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
         summaryAs: String(analysis.summaryAs || "এই প্ৰতিবেদনটো পৰ্যালোচনাৰ বাবে অপেক্ষা কৰি আছে।"),
         status: "Submitted",
         location,
+        latitude: !serviceCategory && latitude != null ? latitude : undefined,
+        longitude: !serviceCategory && longitude != null ? longitude : undefined,
         createdAt: "Just now",
         image,
         reporter: "",
@@ -343,6 +348,25 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
           <label className="field-label">{serviceCategory ? serviceDetails?.contextLabel : "Where is it?"}<div className="input-with-icon"><MapPin size={16} /><input value={location} onChange={(event) => { setLocation(event.target.value); clearReview(); }} placeholder={serviceCategory ? serviceDetails?.contextPlaceholder : "e.g. Hostel block C"} /></div></label>
           <PhotoUpload image={image} onImage={handleImage} onError={setError} onUploading={setUploadingImage} label={serviceCategory ? "Add a supporting document or photo" : "Add a before photo"} />
         </div>
+        {!serviceCategory && (
+          <CampusMapPicker
+            campus={campus}
+            latitude={latitude}
+            longitude={longitude}
+            language={language}
+            onChange={(coords) => {
+              setLatitude(coords.latitude);
+              setLongitude(coords.longitude);
+              if (coords.locationLabel && !location.trim()) {
+                setLocation(coords.locationLabel);
+              }
+            }}
+            onClear={() => {
+              setLatitude(null);
+              setLongitude(null);
+            }}
+          />
+        )}
         {analysis && (
           <div className="ai-result">
             <div className="ai-result-head">
@@ -520,6 +544,15 @@ export function ComplaintDetailWorkflow({ complaint, language, onClose, onUpdate
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="detail-modal">
     <div className="modal-top"><div><span className="modal-kicker">{complaint.id} · REPORTED {complaint.createdAt.toUpperCase()}</span><h2>{complaint.title}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
     <div className="detail-status-row"><span className={`status-pill status-${complaint.status === "In progress" ? "progress" : complaint.status.toLowerCase()}`}><i />{complaint.status}</span><span className={`priority priority-${complaint.priority.toLowerCase()}`}><span className="priority-dot" />{complaint.priority} priority</span><span className="detail-location"><MapPin size={14} />{complaint.location}</span></div>
+    {typeof complaint.latitude === "number" && typeof complaint.longitude === "number" && (
+      <CampusMapView
+        latitude={complaint.latitude}
+        longitude={complaint.longitude}
+        title={complaint.title}
+        locationName={complaint.location}
+        language={language}
+      />
+    )}
     <div className="ai-result"><div className="ai-result-head"><div className="ai-badge"><Sparkles size={15} /> AI analysis</div><span>{complaint.upvotes || 1} affected student{(complaint.upvotes || 1) === 1 ? "" : "s"}</span></div><div className="ai-summary"><div><b>English summary</b><p>{complaint.summaryEn}</p></div><div><b>অসমীয়া সাৰাংশ</b><p>{complaint.summaryAs}</p></div></div><div className="ai-tags"><span><Tag size={13} />{complaint.category}</span><span><Building2 size={13} />{complaint.department}</span><span><Languages size={13} />{complaint.language === "as" ? "Assamese" : complaint.language === "mixed" ? "Mixed language" : "English"}</span>{tags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>
     <div className="detail-section"><h3>Original report</h3><p className="original-report">{complaint.description}</p>{beforeImage && <img className="report-image" src={beforeImage} alt="Before evidence" />}{evidenceError && <div className="duplicate-alert"><AlertCircle size={18} /><span>{evidenceError}</span></div>}<div className="reporter-line"><div className="mini-avatar">{complaint.reporter.split(" ").map((word) => word[0]).join("")}</div><span>Reported by <b>{complaint.reporter}</b></span></div></div>
     {role === "admin" && <section className="detail-section copilot-panel"><div className="copilot-panel-heading"><Sparkles size={17} /><div><h3>Response copilot</h3><p>Draft a factual bilingual update for review before publishing.</p></div></div><button className="secondary-button copilot-generate" disabled={copiloting} onClick={draftResponse}>{copiloting ? <><Loader2 size={15} className="spin" /> Drafting...</> : <><Sparkles size={15} /> Generate response draft</>}</button>{copilotProvider && <span className="copilot-provider">Draft generated with {copilotProvider}; review before publishing.</span>}{suggestedDepartment && <div className="copilot-next-steps"><b>Suggested department: {suggestedDepartment}</b>{suggestedDepartment !== complaint.department && <button className="text-button" onClick={assignSuggestedDepartment}>Assign to this department</button>}</div>}{nextSteps && <div className="copilot-next-steps"><b>Suggested next steps</b><p>{nextSteps}</p></div>}<label className="field-label">Public response · English<textarea value={responseEn} onChange={(event) => setResponseEn(event.target.value)} rows={3} maxLength={1000} placeholder="Draft an update for the reporter..." /></label><label className="field-label">Public response · অসমীয়া<textarea value={responseAs} onChange={(event) => setResponseAs(event.target.value)} rows={3} maxLength={1000} placeholder="প্ৰতিবেদন দিওঁতালৈ অসমীয়াত উত্তৰ..." /></label><div className="resolution-actions"><button className="primary-button" disabled={savingResponse || !responseEn.trim() || !responseAs.trim()} onClick={saveResponse}>{savingResponse ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Publish bilingual response</button></div>{error && <div className="duplicate-alert"><AlertCircle size={18} /><span>{error}</span></div>}</section>}

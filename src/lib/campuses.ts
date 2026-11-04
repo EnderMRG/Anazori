@@ -4,13 +4,15 @@ export type Campus = {
   city: string;
   description: string;
   accent: string;
+  lat: number;
+  lng: number;
 };
 
 export const campuses: Campus[] = [
-  { id: "dibrugarh-university", name: "Dibrugarh University", city: "Dibrugarh, Assam", description: "A connected space for students, faculty, and staff to report and resolve campus issues.", accent: "#2b8f85" },
-  { id: "assam-university", name: "Assam University", city: "Silchar, Assam", description: "Campus services, facilities, and community support in one place.", accent: "#6686d5" },
-  { id: "gauhati-university", name: "Gauhati University", city: "Guwahati, Assam", description: "Make campus operations more transparent, responsive, and inclusive.", accent: "#8d6cc9" },
-  { id: "tezpur-university", name: "Tezpur University", city: "Tezpur, Assam", description: "A simple way for the university community to be heard.", accent: "#d58b55" },
+  { id: "dibrugarh-university", name: "Dibrugarh University", city: "Dibrugarh, Assam", description: "A connected space for students, faculty, and staff to report and resolve campus issues.", accent: "#2b8f85", lat: 27.4539, lng: 94.8973 },
+  { id: "assam-university", name: "Assam University", city: "Silchar, Assam", description: "Campus services, facilities, and community support in one place.", accent: "#6686d5", lat: 24.6881, lng: 92.7505 },
+  { id: "gauhati-university", name: "Gauhati University", city: "Guwahati, Assam", description: "Make campus operations more transparent, responsive, and inclusive.", accent: "#8d6cc9", lat: 26.1557, lng: 91.6622 },
+  { id: "tezpur-university", name: "Tezpur University", city: "Tezpur, Assam", description: "A simple way for the university community to be heard.", accent: "#d58b55", lat: 26.7006, lng: 92.8303 },
 ];
 
 export function getCampus(name?: string | null) {
@@ -20,5 +22,7 @@ export function getCampus(name?: string | null) {
     city: "Campus network",
     description: "A connected space for the campus community.",
     accent: "#2b8f85",
+    lat: 27.4539,
+    lng: 94.8973,
   };
 }

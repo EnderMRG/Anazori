@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
+import { jwtVerify } from "jose/jwt/verify";
 
 const sessionCookie = "civicsense_session";
 
@@ -35,3 +35,4 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/dashboard", "/admin"],
 };
+

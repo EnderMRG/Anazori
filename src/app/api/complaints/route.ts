@@ -18,6 +18,10 @@ function publicResponse(body?: string) {
 
 function toClientComplaint(complaint: ComplaintWithUser, includeEvidence = true) {
   const response = publicResponse(complaint.notifications?.[0]?.body || complaint.master?.notifications[0]?.body);
+  const rawLat = (complaint as Record<string, unknown>).latitude;
+  const rawLng = (complaint as Record<string, unknown>).longitude;
+  const latitude = typeof rawLat === "number" && Number.isFinite(rawLat) ? rawLat : undefined;
+  const longitude = typeof rawLng === "number" && Number.isFinite(rawLng) ? rawLng : undefined;
   return {
     id: complaint.publicId,
     title: complaint.title,
@@ -28,6 +32,8 @@ function toClientComplaint(complaint: ComplaintWithUser, includeEvidence = true)
     department: complaint.department,
     status: complaint.status,
     location: complaint.location,
+    latitude,
+    longitude,
     ...(includeEvidence ? { image: complaint.imageUrl || undefined, resolvedImage: complaint.resolvedImageUrl || undefined } : {}),
     resolutionNotes: complaint.resolutionNotes || undefined,
     ...response,
@@ -113,6 +119,10 @@ export async function POST(request: Request) {
     const description = String(body.description || "").trim().slice(0, 5000);
     const location = String(body.location || "Campus").trim().slice(0, 180);
     const image = typeof body.image === "string" ? body.image : "";
+    const rawLat = typeof body.latitude === "number" ? body.latitude : (body.latitude ? Number(body.latitude) : null);
+    const rawLng = typeof body.longitude === "number" ? body.longitude : (body.longitude ? Number(body.longitude) : null);
+    const latitude = typeof rawLat === "number" && Number.isFinite(rawLat) ? rawLat : null;
+    const longitude = typeof rawLng === "number" && Number.isFinite(rawLng) ? rawLng : null;
     if (!description || !location) return NextResponse.json({ error: "Description and location are required." }, { status: 400 });
     if (!validImage(image)) return NextResponse.json({ error: "Evidence must be a supported image smaller than 3 MB." }, { status: 400 });
 
@@ -138,11 +148,11 @@ export async function POST(request: Request) {
       if (master) {
         const upvotes = master.upvotes + 1;
         const updatedMaster = await tx.complaint.update({ where: { id: master.id }, data: { upvotes, priority: escalatedPriority(upvotes, master.priority as IssueAnalysis["priority"]) } });
-        await tx.complaint.create({ data: { publicId: publicId(), userId: session.id, campusName: session.campusName, title, description, language: analysis.language, category: analysis.category, priority: analysis.priority, department: analysis.department, status: "Submitted", location, imageUrl: image || null, summaryEn: analysis.summaryEn, summaryAs: analysis.summaryAs, tags: analysis.tags, upvotes: 0, masterId: updatedMaster.id } });
+        await tx.complaint.create({ data: { publicId: publicId(), userId: session.id, campusName: session.campusName, title, description, language: analysis.language, category: analysis.category, priority: analysis.priority, department: analysis.department, status: "Submitted", location, latitude, longitude, imageUrl: image || null, summaryEn: analysis.summaryEn, summaryAs: analysis.summaryAs, tags: analysis.tags, upvotes: 0, masterId: updatedMaster.id } });
         await tx.notification.create({ data: { userId: master.userId, title: "Another student reported this issue", body: `Your report ${master.publicId} now has ${upvotes} affected students.`, complaintId: master.id } });
         return tx.complaint.findUniqueOrThrow({ where: { id: master.id }, include: { user: { select: { name: true } } } });
       }
-      return tx.complaint.create({ data: { publicId: publicId(), userId: session.id, campusName: session.campusName, title, description, language: analysis.language, category: analysis.category, priority: analysis.priority, department: analysis.department, status: "Submitted", location, imageUrl: image || null, summaryEn: analysis.summaryEn, summaryAs: analysis.summaryAs, tags: analysis.tags, upvotes: 1 }, include: { user: { select: { name: true } } } });
+      return tx.complaint.create({ data: { publicId: publicId(), userId: session.id, campusName: session.campusName, title, description, language: analysis.language, category: analysis.category, priority: analysis.priority, department: analysis.department, status: "Submitted", location, latitude, longitude, imageUrl: image || null, summaryEn: analysis.summaryEn, summaryAs: analysis.summaryAs, tags: analysis.tags, upvotes: 1 }, include: { user: { select: { name: true } } } });
     });
     return NextResponse.json({ complaint: toClientComplaint(complaint, false), clustered: Boolean(master), masterId: master?.publicId || null }, { status: 201 });
   } catch (error) {

@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS "Complaint" (
   "department" TEXT NOT NULL,
   "status" TEXT NOT NULL DEFAULT 'Submitted',
   "location" TEXT NOT NULL,
+  "latitude" DOUBLE PRECISION,
+  "longitude" DOUBLE PRECISION,
   "imageUrl" TEXT,
   "resolvedImageUrl" TEXT,
   "resolutionNotes" TEXT,
