@@ -101,7 +101,7 @@ export async function analyseIssueWithProvider(input: AnalysisInput, fallback = 
   const key = process.env.GEMINI_API_KEY;
   if (!key) return { result: fallback, provider: "local" };
   const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-  const parts: Array<Record<string, unknown>> = [{ text: `Analyse this campus grievance or student service request. It may concern physical campus conditions, administration, examinations, fees, library services, scholarships, or student welfare. Return only JSON with category, department, priority (Critical|High|Medium|Low), language (en|as|mixed), tags (2-4 hashtag strings), summaryEn, summaryAs, justification, confidence (0-1), and imageAssessment. Preserve concrete details from the report in both summaries. If an image is attached, describe only visible details and say whether it appears relevant to the report; do not claim certainty beyond the image. If no image is attached, imageAssessment should be "No image attached." Do not invent facts.\nTitle: ${input.title}\nDescription: ${input.description}\nLocation: ${input.location}` }];
+  const parts: Array<Record<string, unknown>> = [{ text: `Analyse this campus grievance or student service request. It may concern physical campus conditions, administration, examinations, fees, library services, scholarships, or student welfare. Return only JSON with category, department, priority (Critical|High|Medium|Low), language (en|as|mixed), tags (2-4 hashtag strings), summaryEn, summaryAs, justification, confidence (0-1), and imageAssessment. Preserve concrete details from the report in both summaries. If an image is attached, describe only visible details and state whether it appears relevant to the report with full, complete sentences. If no image is attached, imageAssessment should be "No image attached." Do not invent facts.\nTitle: ${input.title}\nDescription: ${input.description}\nLocation: ${input.location}` }];
   if (input.image?.startsWith("data:")) {
     const match = input.image.match(/^data:([^;]+);base64,(.+)$/);
     if (match && Buffer.byteLength(match[2], "base64") <= 3 * 1024 * 1024) parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
@@ -120,11 +120,11 @@ export async function analyseIssueWithProvider(input: AnalysisInput, fallback = 
     priority,
     language,
     tags: Array.isArray(value.tags) ? Array.from(new Set(value.tags.filter((tag): tag is string => typeof tag === "string" && Boolean(tag.trim())).map((tag) => tag.trim().startsWith("#") ? tag.trim() : `#${tag.trim()}`))).slice(0, 4) : fallback.tags,
-    summaryEn: typeof value.summaryEn === "string" && value.summaryEn.trim() ? value.summaryEn.trim().slice(0, 500) : fallback.summaryEn,
-    summaryAs: typeof value.summaryAs === "string" && value.summaryAs.trim() ? value.summaryAs.trim().slice(0, 500) : fallback.summaryAs,
-    justification: typeof value.justification === "string" && value.justification.trim() ? value.justification.trim().slice(0, 300) : fallback.justification,
+    summaryEn: typeof value.summaryEn === "string" && value.summaryEn.trim() ? value.summaryEn.trim().slice(0, 2000) : fallback.summaryEn,
+    summaryAs: typeof value.summaryAs === "string" && value.summaryAs.trim() ? value.summaryAs.trim().slice(0, 2000) : fallback.summaryAs,
+    justification: typeof value.justification === "string" && value.justification.trim() ? value.justification.trim().slice(0, 1500) : fallback.justification,
     confidence: typeof value.confidence === "number" ? Math.max(0, Math.min(1, value.confidence)) : fallback.confidence,
-    imageAssessment: typeof value.imageAssessment === "string" && value.imageAssessment.trim() ? value.imageAssessment.trim().slice(0, 300) : fallback.imageAssessment,
+    imageAssessment: typeof value.imageAssessment === "string" && value.imageAssessment.trim() ? value.imageAssessment.trim().slice(0, 3000) : fallback.imageAssessment,
   };
   return { provider: "gemini", result };
 }

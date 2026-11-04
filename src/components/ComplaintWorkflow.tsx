@@ -285,7 +285,51 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
           <label className="field-label">{serviceCategory ? serviceDetails?.contextLabel : "Where is it?"}<div className="input-with-icon"><MapPin size={16} /><input value={location} onChange={(event) => { setLocation(event.target.value); clearReview(); }} placeholder={serviceCategory ? serviceDetails?.contextPlaceholder : "e.g. Hostel block C"} /></div></label>
           <PhotoUpload image={image} onImage={handleImage} onError={setError} onUploading={setUploadingImage} label={serviceCategory ? "Add a supporting document or photo" : "Add a before photo"} />
         </div>
-        {analysis && <div className="ai-result"><div className="ai-result-head"><div className="ai-badge"><Sparkles size={15} /> AI analysis complete</div><span>{String(analysis.provider || "local")}</span></div><div className="ai-tags"><span><Tag size={13} />{serviceCategory ? selectedService : String(analysis.category)}</span><span><Building2 size={13} />{serviceCategory ? serviceDetails?.department : String(analysis.department)}</span><span><AlertCircle size={13} />{String(analysis.priority)} priority</span></div>{image && typeof analysis.imageAssessment === "string" && <p className="image-assessment"><b>Photo review:</b> {analysis.imageAssessment}</p>}</div>}
+        {analysis && (
+          <div className="ai-result">
+            <div className="ai-result-head">
+              <div className="ai-badge"><Sparkles size={15} /> AI analysis complete</div>
+              <span>{String(analysis.provider || "local")}</span>
+            </div>
+            <div className="ai-tags">
+              <span><Tag size={13} />{serviceCategory ? selectedService : String(analysis.category)}</span>
+              <span><Building2 size={13} />{serviceCategory ? serviceDetails?.department : String(analysis.department)}</span>
+              <span><AlertCircle size={13} />{String(analysis.priority)} priority</span>
+              {typeof analysis.confidence === "number" && (
+                <span><Check size={13} />{Math.round(analysis.confidence * 100)}% confidence</span>
+              )}
+              {Array.isArray(analysis.tags) && (analysis.tags as unknown[]).filter((t): t is string => typeof t === "string").map((tag) => <span key={tag}>{tag}</span>)}
+            </div>
+            {(Boolean(analysis.summaryEn) || Boolean(analysis.summaryAs)) && (
+              <div className="ai-summary">
+                {Boolean(analysis.summaryEn) && (
+                  <div>
+                    <b>English summary</b>
+                    <p>{String(analysis.summaryEn)}</p>
+                  </div>
+                )}
+                {Boolean(analysis.summaryAs) && (
+                  <div>
+                    <b>অসমীয়া সাৰাংশ</b>
+                    <p>{String(analysis.summaryAs)}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {image && typeof analysis.imageAssessment === "string" && analysis.imageAssessment.trim() && (
+              <div className="image-assessment">
+                <b>Photo review:</b>
+                <p>{analysis.imageAssessment}</p>
+              </div>
+            )}
+            {typeof analysis.justification === "string" && analysis.justification.trim() && (
+              <div className="ai-justification">
+                <b>AI routing notes:</b>
+                <p>{analysis.justification}</p>
+              </div>
+            )}
+          </div>
+        )}
         {followUp?.needed && <section className="follow-up-panel"><div className="copilot-panel-heading"><MessageSquareText size={17} /><b>One quick clarification</b></div><p>{question}</p><label className="field-label">Your answer<textarea value={followUpAnswer} onChange={(event) => setFollowUpAnswer(event.target.value)} rows={2} placeholder={followUp.language === "as" ? "আপোনাৰ উত্তৰ..." : "Add a short answer..."} /></label></section>}
         {similarReports.length > 0 && <section className="similar-reports-panel"><div className="copilot-panel-heading"><CopyCheck size={17} /><b>Possible duplicate reports</b></div><p>AI compared reports across Assamese and English. Choose one only if it describes the same issue; otherwise submit separately.</p>{similarReports.map((match) => <div className="similar-report-card" key={match.id}><div><b>{match.title}</b><span>{match.id} · {match.location} · {match.category} · {match.language === "as" ? "অসমীয়া" : "English"}</span><small>{match.reason} · {Math.round(match.score * 100)}% match</small></div><button type="button" className={duplicateOf === match.id ? "selected-match-button" : "secondary-button"} onClick={() => setDuplicateOf(duplicateOf === match.id ? "" : match.id)}>{duplicateOf === match.id ? "Selected" : "Same issue"}</button></div>)}{duplicateOf && <button type="button" className="text-button" onClick={() => setDuplicateOf("")}>No, submit a separate report</button>}</section>}
         {analysis && !followUp?.needed && <div className="follow-up-clear">The report has enough detail to continue without a clarification.</div>}

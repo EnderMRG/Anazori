@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 const cache = new Map<string, { expires: number; result: IssueAnalysis }>();
 
 function requestKey(input: { title: string; description: string; location: string; image?: string }) {
-  return createHash("sha256").update(`${input.title}\n${input.description}\n${input.location}\n${input.image || ""}`).digest("hex");
+  return createHash("sha256").update(`v2:${input.title}\n${input.description}\n${input.location}\n${input.image || ""}`).digest("hex");
 }
 
 export async function POST(request: Request) {

@@ -574,8 +574,56 @@ img, svg { max-width: 100%; }
 }
 
 .load-more-reports { display: flex; justify-content: center; padding: 24px 0 4px; }
-.image-assessment { color: #52716e; font-size: 11px; line-height: 1.5; margin-top: 10px; }
-.image-assessment b { color: #67928d; }
+.image-assessment {
+  color: #52716e;
+  font-size: 11.5px;
+  line-height: 1.6;
+  margin-top: 12px;
+  background: #fbfefd;
+  border: 1px solid #dcefeb;
+  border-radius: 8px;
+  padding: 11px 14px;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+.image-assessment b {
+  color: #2b8f85;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-block;
+  margin-right: 6px;
+}
+.image-assessment p {
+  color: #52716e;
+  font-size: 11.5px;
+  line-height: 1.6;
+  margin: 5px 0 0;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+.ai-justification {
+  color: #52716e;
+  font-size: 11px;
+  line-height: 1.55;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-left: 3px solid #70b5ab;
+  background: #f4faf9;
+  border-radius: 0 8px 8px 0;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+.ai-justification b {
+  color: #2b8f85;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 3px;
+}
+.ai-justification p {
+  margin: 0;
+  color: #597370;
+}
 .evidence-comparison { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 12px 0; }
 .evidence-comparison figure { margin: 0; min-width: 0; }
 .evidence-comparison figcaption { color: #728092; font-size: 10px; font-weight: 700; margin-bottom: 5px; }
