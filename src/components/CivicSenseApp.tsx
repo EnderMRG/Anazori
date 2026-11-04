@@ -492,11 +492,14 @@ export default function CivicSenseApp() {
     return true;
   }
 
-  async function handleUpvote(id: string) {
+  async function handleUpvote(id: string, action: "add" | "remove" = "add") {
     const previous = complaints.find((item) => item.id === id);
-    const nextUpvotes = (previous?.upvotes ?? 1) + 1;
-    const nextPriority: Priority =
-      nextUpvotes >= 15 ? "Critical" : nextUpvotes >= 5 && previous?.priority !== "Critical" ? "High" : previous?.priority || "Medium";
+    const nextUpvotes = action === "remove"
+      ? Math.max(0, (previous?.upvotes ?? 1) - 1)
+      : (previous?.upvotes ?? 1) + 1;
+    const nextPriority: Priority = action === "remove"
+      ? (nextUpvotes >= 15 ? "Critical" : nextUpvotes >= 5 ? "High" : "Medium")
+      : (nextUpvotes >= 15 ? "Critical" : nextUpvotes >= 5 && previous?.priority !== "Critical" ? "High" : previous?.priority || "Medium");
 
     setComplaints((current) =>
       current.map((item) => (item.id === id ? { ...item, upvotes: nextUpvotes, priority: nextPriority } : item))
@@ -508,6 +511,8 @@ export default function CivicSenseApp() {
     try {
       const response = await fetch(`/api/complaints/${encodeURIComponent(id)}/upvote`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
       });
       if (response.ok) {
         const data = await response.json();

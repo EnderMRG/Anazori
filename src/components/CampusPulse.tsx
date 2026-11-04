@@ -38,7 +38,7 @@ export type CampusPulseProps = {
   complaints?: Complaint[];
   language?: Language;
   onSelect?: (complaint: Complaint) => void;
-  onUpvote?: (id: string) => Promise<void> | void;
+  onUpvote?: (id: string, action?: "add" | "remove") => Promise<void> | void;
   role?: "student" | "admin";
 };
 
@@ -129,11 +129,11 @@ export default function CampusPulse({
     const nextSet = new Set(upvotedIds);
 
     if (alreadyUpvoted) {
-      // Already upvoted
-      return;
+      nextSet.delete(complaintId);
+    } else {
+      nextSet.add(complaintId);
     }
 
-    nextSet.add(complaintId);
     setUpvotedIds(nextSet);
     try {
       localStorage.setItem(storageKey, JSON.stringify(Array.from(nextSet)));
@@ -141,19 +141,30 @@ export default function CampusPulse({
       // ignore
     }
 
-    // Optimistic count increment
+    // Optimistic count update (add 1 or remove 1)
+    const currentCount =
+      upvoteCounts[complaintId] ??
+      complaints.find((c) => c.id === complaintId)?.upvotes ??
+      1;
+    const nextCount = alreadyUpvoted
+      ? Math.max(0, currentCount - 1)
+      : currentCount + 1;
+
     setUpvoteCounts((prev) => ({
       ...prev,
-      [complaintId]: (prev[complaintId] || 1) + 1,
+      [complaintId]: nextCount,
     }));
 
     setUpvotingId(complaintId);
     try {
+      const action: "add" | "remove" = alreadyUpvoted ? "remove" : "add";
       if (onUpvote) {
-        await onUpvote(complaintId);
+        await onUpvote(complaintId, action);
       } else {
         await fetch(`/api/complaints/${encodeURIComponent(complaintId)}/upvote`, {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
         });
       }
     } catch (err) {
@@ -622,7 +633,16 @@ export default function CampusPulse({
                     className={`upvote-action-btn ${hasUpvoted ? "upvoted-active" : ""}`}
                     disabled={upvotingId === item.id}
                     onClick={(e) => void handleUpvoteClick(e, item.id)}
-                    aria-label={`Upvote issue ${item.id}`}
+                    aria-label={hasUpvoted ? `Remove upvote for issue ${item.id}` : `Upvote issue ${item.id}`}
+                    title={
+                      hasUpvoted
+                        ? isAssamese
+                          ? "ভোট উঠাই লওক (Click to remove upvote)"
+                          : "Click to remove your upvote"
+                        : isAssamese
+                        ? "সমৰ্থন কৰক (Click to upvote)"
+                        : "Click to upvote this issue"
+                    }
                   >
                     {upvotingId === item.id ? (
                       <Loader2 size={16} className="spin" />

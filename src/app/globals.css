@@ -1715,6 +1715,12 @@ img, svg { max-width: 100%; }
   transform: scale(1.03);
 }
 
+.upvote-action-btn.upvoted-active:hover {
+  background: #23786f;
+  border-color: #23786f;
+  color: #ffffff;
+}
+
 .upvote-action-btn.upvoted-active {
   background: #2b8f85;
   border-color: #2b8f85;
