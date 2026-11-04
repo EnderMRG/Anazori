@@ -31,6 +31,7 @@ import {
   Search,
   Send,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Tag,
@@ -645,6 +646,20 @@ function AuthPage({ mode, onModeChange, onBack, onSuccess }: { mode: "signin" | 
   const [availableCampuses, setAvailableCampuses] = useState<Campus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Institutional Administrator Verification Details
+  const [designation, setDesignation] = useState("Dean of Student Affairs / Welfare");
+  const [customDesignation, setCustomDesignation] = useState("");
+  const [staffId, setStaffId] = useState("");
+  const [department, setDepartment] = useState("Office of Student Affairs & Welfare");
+  const [campusCity, setCampusCity] = useState("Dibrugarh, Assam");
+  const [institutionType, setInstitutionType] = useState("State Public University");
+  const [aisheCode, setAisheCode] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("https://dibru.ac.in");
+  const [phone, setPhone] = useState("");
+  const [adminSignupCode, setAdminSignupCode] = useState("");
+  const [authorizedAffirmation, setAuthorizedAffirmation] = useState(false);
+
   const isSignUp = mode === "signup";
 
   useEffect(() => {
@@ -656,9 +671,75 @@ function AuthPage({ mode, onModeChange, onBack, onSuccess }: { mode: "signin" | 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
+
+    if (isSignUp && accountType === "admin") {
+      const finalDesignation = designation === "Other" ? customDesignation.trim() : designation;
+      if (!finalDesignation) {
+        setError("Please specify your official administrative designation.");
+        return;
+      }
+      if (!staffId.trim()) {
+        setError("Please enter your official employee or staff ID number.");
+        return;
+      }
+      if (!department.trim()) {
+        setError("Please specify your administrative wing or department.");
+        return;
+      }
+      if (!campusCity.trim()) {
+        setError("Please enter the campus city and state location.");
+        return;
+      }
+      if (!websiteUrl.trim() || !websiteUrl.includes(".")) {
+        setError("Please provide a valid official institution web portal (e.g. https://dibru.ac.in).");
+        return;
+      }
+      if (!adminSignupCode.trim()) {
+        setError("Please enter the campus administrative authorization key (Demo code: 221232).");
+        return;
+      }
+      if (!authorizedAffirmation) {
+        setError("Please certify your official administrative authorization before proceeding.");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
-      const response = await fetch(`/api/auth/${isSignUp ? "signup" : "signin"}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, password, role: accountType, campusName }) });
+      const finalDesignation = designation === "Other" ? customDesignation.trim() : designation;
+      const payload = isSignUp
+        ? accountType === "admin"
+          ? {
+              name: name.trim(),
+              email: email.trim(),
+              password,
+              role: "admin",
+              campusName: campusName.trim(),
+              campusCity: campusCity.trim(),
+              institutionType,
+              aisheCode: aisheCode.trim(),
+              websiteUrl: websiteUrl.trim(),
+              designation: finalDesignation,
+              department: department.trim(),
+              staffId: staffId.trim(),
+              phone: phone.trim(),
+              adminSignupCode: adminSignupCode.trim(),
+              authorizedAffirmation,
+            }
+          : {
+              name: name.trim(),
+              email: email.trim(),
+              password,
+              role: "student",
+              campusName: campusName.trim(),
+            }
+        : { email: email.trim(), password };
+
+      const response = await fetch(`/api/auth/${isSignUp ? "signup" : "signin"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Authentication failed.");
       onSuccess(data.user);
@@ -669,7 +750,381 @@ function AuthPage({ mode, onModeChange, onBack, onSuccess }: { mode: "signin" | 
     }
   }
 
-  return <div className="auth-page"><div className="auth-visual"><button className="auth-brand" onClick={onBack}><CivicMark /><span><b>CivicSense</b><small>SMART CAMPUS CARE</small></span></button><div className="auth-quote"><span className="auth-quote-mark">“</span><h1>Every voice can<br /><em>improve campus.</em></h1><p>Report, track, and resolve issues together — in the language you are most comfortable with.</p><div className="auth-bilingual"><Languages size={16} /><span>English <b>+</b> অসমীয়া</span></div></div></div><div className="auth-form-side"><button className="auth-back" onClick={onBack}><ArrowRight size={15} className="back-arrow" /> Back to home</button><div className="auth-card"><div className="auth-card-mark"><CivicMark /></div><h2>{isSignUp ? "Create your account" : "Welcome back"}</h2><p>{isSignUp ? "Join your campus community and make a difference." : "Sign in to continue to your campus dashboard."}</p><div className="auth-tabs"><button className={!isSignUp ? "active-auth-tab" : ""} onClick={() => { onModeChange("signin"); setError(""); }}>Sign in</button><button className={isSignUp ? "active-auth-tab" : ""} onClick={() => { onModeChange("signup"); setError(""); }}>Create account</button></div>{isSignUp && <div className="account-type-toggle"><button className={accountType === "student" ? "selected-account-type" : ""} onClick={() => setAccountType("student")} type="button"><UserRound size={14} /> Student</button><button className={accountType === "admin" ? "selected-account-type" : ""} onClick={() => setAccountType("admin")} type="button"><ShieldCheck size={14} /> Campus admin</button></div>}<form onSubmit={submit}>{isSignUp && <label className="auth-label">Full name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Arjun Das" autoComplete="name" /></label>}<label className="auth-label">Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@university.ac.in" autoComplete="email" /></label><label className="auth-label">Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isSignUp ? "At least 8 characters" : "Enter your password"} autoComplete={isSignUp ? "new-password" : "current-password"} /></label>{isSignUp && (accountType === "admin" ? <label className="auth-label">Campus name<input required value={campusName} onChange={(event) => setCampusName(event.target.value)} placeholder="e.g. Dibrugarh University" /></label> : <CampusSearchSelect label="Your campus" value={campusName} campuses={availableCampuses} onChange={setCampusName} required />)}{isSignUp && accountType === "student" && availableCampuses.length === 0 && <div className="auth-error"><AlertCircle size={15} />No campuses are registered yet. Ask an administrator to register a campus first.</div>}{error && <div className="auth-error"><AlertCircle size={15} />{error}</div>}<button className="auth-submit" disabled={loading || (isSignUp && accountType === "student" && availableCampuses.length === 0)}>{loading ? <><Loader2 size={16} className="spin" />Please wait...</> : isSignUp ? "Create account" : "Sign in"}</button></form><small className="auth-privacy"><ShieldCheck size={13} /> Your information is encrypted and secure.</small></div><div className="auth-footer">© 2026 CivicSense · Dibrugarh University</div></div></div>;
+  return (
+    <div className="auth-page">
+      <div className="auth-visual">
+        <button className="auth-brand" onClick={onBack}>
+          <CivicMark />
+          <span>
+            <b>CivicSense</b>
+            <small>SMART CAMPUS CARE</small>
+          </span>
+        </button>
+        <div className="auth-quote">
+          <span className="auth-quote-mark">“</span>
+          <h1>
+            Every voice can<br />
+            <em>improve campus.</em>
+          </h1>
+          <p>Report, track, and resolve issues together — in the language you are most comfortable with.</p>
+          <div className="auth-bilingual">
+            <Languages size={16} />
+            <span>English <b>+</b> অসমীয়া</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="auth-form-side">
+        <button className="auth-back" onClick={onBack}>
+          <ArrowRight size={15} className="back-arrow" /> Back to home
+        </button>
+
+        <div className={`auth-card ${isSignUp && accountType === "admin" ? "auth-card-admin" : ""}`}>
+          <div className="auth-card-mark"><CivicMark /></div>
+          <h2>
+            {isSignUp
+              ? accountType === "admin"
+                ? "Institutional Verification & Onboarding"
+                : "Create your account"
+              : "Welcome back"}
+          </h2>
+          <p>
+            {isSignUp
+              ? accountType === "admin"
+                ? "Register your accredited institution and verify administrator credentials to establish your campus care command center."
+                : "Join your campus community and make a difference."
+              : "Sign in to continue to your campus dashboard."}
+          </p>
+
+          <div className="auth-tabs">
+            <button className={!isSignUp ? "active-auth-tab" : ""} onClick={() => { onModeChange("signin"); setError(""); }}>
+              Sign in
+            </button>
+            <button className={isSignUp ? "active-auth-tab" : ""} onClick={() => { onModeChange("signup"); setError(""); }}>
+              Create account
+            </button>
+          </div>
+
+          {isSignUp && (
+            <div className="account-type-toggle">
+              <button
+                className={accountType === "student" ? "selected-account-type" : ""}
+                onClick={() => setAccountType("student")}
+                type="button"
+              >
+                <UserRound size={14} /> Student
+              </button>
+              <button
+                className={accountType === "admin" ? "selected-account-type" : ""}
+                onClick={() => setAccountType("admin")}
+                type="button"
+              >
+                <ShieldCheck size={14} /> Campus admin
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={submit}>
+            {isSignUp && accountType === "admin" ? (
+              <div className="auth-admin-section">
+                <div className="auth-admin-banner">
+                  <ShieldCheck size={20} style={{ flexShrink: 0, marginTop: 2, color: "#24786f" }} />
+                  <div>
+                    <b>Authorized Administrative Registry</b>
+                    <span>
+                      Registering a campus grants full authority to dispatch work orders and oversee student grievances. Institutional credentials and authorization keys are verified.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Section 1: Institution Registry */}
+                <div className="auth-section-title">
+                  <Building2 size={14} /> 1. Institution & Campus Registry
+                </div>
+
+                <label className="auth-label">
+                  Official campus or university name *
+                  <input
+                    required
+                    value={campusName}
+                    onChange={(event) => setCampusName(event.target.value)}
+                    placeholder="e.g. Dibrugarh University"
+                  />
+                </label>
+
+                <div className="auth-two-col">
+                  <label className="auth-label">
+                    Institution category *
+                    <select
+                      className="auth-select"
+                      value={institutionType}
+                      onChange={(event) => setInstitutionType(event.target.value)}
+                    >
+                      <option value="State Public University">State Public University</option>
+                      <option value="Central University">Central University</option>
+                      <option value="Institute of National Importance (IIT/NIT/AIIMS)">Institute of National Importance</option>
+                      <option value="Deemed-to-be University">Deemed-to-be University</option>
+                      <option value="Autonomous University College">Autonomous University College</option>
+                      <option value="Government Technical / Medical Institution">Govt. Technical / Medical Institution</option>
+                      <option value="Affiliated Degree College">Affiliated Degree College</option>
+                    </select>
+                  </label>
+
+                  <label className="auth-label">
+                    Campus location (City, State) *
+                    <input
+                      required
+                      value={campusCity}
+                      onChange={(event) => setCampusCity(event.target.value)}
+                      placeholder="e.g. Dibrugarh, Assam"
+                    />
+                  </label>
+                </div>
+
+                <div className="auth-two-col">
+                  <label className="auth-label">
+                    AISHE / Accreditation code
+                    <input
+                      value={aisheCode}
+                      onChange={(event) => setAisheCode(event.target.value)}
+                      placeholder="e.g. U-0050 or NAAC A++"
+                    />
+                    <span className="auth-hint">Ministry of Education / UGC registry ID</span>
+                  </label>
+
+                  <label className="auth-label">
+                    Official university web portal *
+                    <input
+                      required
+                      type="url"
+                      value={websiteUrl}
+                      onChange={(event) => setWebsiteUrl(event.target.value)}
+                      placeholder="e.g. https://dibru.ac.in"
+                    />
+                  </label>
+                </div>
+
+                {/* Section 2: Administrator Credentials */}
+                <div className="auth-section-title">
+                  <BadgeCheck size={14} /> 2. Official Administrator Credentials
+                </div>
+
+                <div className="auth-two-col">
+                  <label className="auth-label">
+                    Full legal name *
+                    <input
+                      required
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      placeholder="e.g. Dr. Biren Das"
+                      autoComplete="name"
+                    />
+                  </label>
+
+                  <label className="auth-label">
+                    Official staff / employee ID *
+                    <input
+                      required
+                      value={staffId}
+                      onChange={(event) => setStaffId(event.target.value)}
+                      placeholder="e.g. DU-EST-2024-441"
+                    />
+                  </label>
+                </div>
+
+                <div className="auth-two-col">
+                  <label className="auth-label">
+                    Official designation / title *
+                    <select
+                      className="auth-select"
+                      value={designation}
+                      onChange={(event) => setDesignation(event.target.value)}
+                    >
+                      <option value="Dean of Student Affairs / Welfare">Dean of Student Affairs / Welfare</option>
+                      <option value="Registrar / Assistant Registrar">Registrar / Assistant Registrar</option>
+                      <option value="Chief Hostel Warden / Proctor">Chief Hostel Warden / Proctor</option>
+                      <option value="Director of IT & Campus Systems">Director of IT & Campus Systems</option>
+                      <option value="Estate & Campus Works Officer">Estate & Campus Works Officer</option>
+                      <option value="Student Grievance Redressal Officer">Student Grievance Redressal Officer</option>
+                      <option value="Head of Department">Head of Department</option>
+                      <option value="Campus Administration Officer">Campus Administration Officer</option>
+                      <option value="Other">Other designation (specify below)</option>
+                    </select>
+                  </label>
+
+                  <label className="auth-label">
+                    Department / administrative wing *
+                    <input
+                      required
+                      value={department}
+                      onChange={(event) => setDepartment(event.target.value)}
+                      placeholder="e.g. Office of Student Affairs"
+                    />
+                  </label>
+                </div>
+
+                {designation === "Other" && (
+                  <label className="auth-label">
+                    Specify custom designation *
+                    <input
+                      required
+                      value={customDesignation}
+                      onChange={(event) => setCustomDesignation(event.target.value)}
+                      placeholder="e.g. Senior Campus Officer"
+                    />
+                  </label>
+                )}
+
+                <div className="auth-two-col">
+                  <label className="auth-label">
+                    Official institutional email *
+                    <input
+                      required
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="e.g. biren.das@dibru.ac.in"
+                      autoComplete="email"
+                    />
+                    <span className="auth-hint">Official domain (.ac.in / .edu.in)</span>
+                  </label>
+
+                  <label className="auth-label">
+                    Contact number / intercom
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                      placeholder="e.g. +91 373 2370243"
+                    />
+                  </label>
+                </div>
+
+                <label className="auth-label">
+                  Account password *
+                  <input
+                    required
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="At least 8 characters"
+                    autoComplete="new-password"
+                  />
+                </label>
+
+                {/* Section 3: Security & Authorization Key */}
+                <div className="auth-section-title">
+                  <ShieldAlert size={14} /> 3. Authorization & Security Key
+                </div>
+
+                <label className="auth-label">
+                  Campus administrative authorization key *
+                  <input
+                    required
+                    type="password"
+                    value={adminSignupCode}
+                    onChange={(event) => setAdminSignupCode(event.target.value)}
+                    placeholder="Enter 6-digit administrative security passcode"
+                  />
+                  <span className="auth-hint">
+                    🔒 Authorization key issued by IT administration. (Demo deployment key: <b>221232</b>)
+                  </span>
+                </label>
+
+                <label className="auth-checkbox-label">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={authorizedAffirmation}
+                    onChange={(event) => setAuthorizedAffirmation(event.target.checked)}
+                  />
+                  <span>
+                    I solemnly certify that I am an authorized administrative staff member of this institution and duly permitted to establish campus grievance routing and dispatch work orders on CivicSense.
+                  </span>
+                </label>
+              </div>
+            ) : (
+              <>
+                {isSignUp && (
+                  <label className="auth-label">
+                    Full name
+                    <input
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      placeholder="Arjun Das"
+                      autoComplete="name"
+                      required
+                    />
+                  </label>
+                )}
+                <label className="auth-label">
+                  Email address
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@university.ac.in"
+                    autoComplete="email"
+                    required
+                  />
+                </label>
+                <label className="auth-label">
+                  Password
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder={isSignUp ? "At least 8 characters" : "Enter your password"}
+                    autoComplete={isSignUp ? "new-password" : "current-password"}
+                    required
+                  />
+                </label>
+                {isSignUp && (
+                  <CampusSearchSelect
+                    label="Your campus"
+                    value={campusName}
+                    campuses={availableCampuses}
+                    onChange={setCampusName}
+                    required
+                  />
+                )}
+                {isSignUp && accountType === "student" && availableCampuses.length === 0 && (
+                  <div className="auth-error">
+                    <AlertCircle size={15} />No campuses are registered yet. Ask an administrator to register a campus first.
+                  </div>
+                )}
+              </>
+            )}
+
+            {error && (
+              <div className="auth-error">
+                <AlertCircle size={15} />{error}
+              </div>
+            )}
+
+            <button
+              className="auth-submit"
+              disabled={loading || (isSignUp && accountType === "student" && availableCampuses.length === 0)}
+            >
+              {loading ? (
+                <><Loader2 size={16} className="spin" />Please wait...</>
+              ) : isSignUp ? (
+                accountType === "admin" ? "Verify credentials & register campus" : "Create account"
+              ) : (
+                "Sign in"
+              )}
+            </button>
+          </form>
+
+          <small className="auth-privacy">
+            <ShieldCheck size={13} /> Your information is encrypted and secure.
+          </small>
+        </div>
+
+        <div className="auth-footer">© 2026 CivicSense · Dibrugarh University</div>
+      </div>
+    </div>
+  );
 }
 
 function LandingPage({ language, onLanguageChange, onHome, onEnter, onSignUp }: { language: Language; onLanguageChange: () => void; onHome: () => void; onEnter: () => void; onSignUp: () => void }) {
