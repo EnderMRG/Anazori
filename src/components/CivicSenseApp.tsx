@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   AlertCircle,
   ArrowRight,
   Bell,
@@ -90,6 +91,14 @@ export type Complaint = {
   adminResponseAs?: string;
 };
 
+const sampleWaterBefore = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='360' viewBox='0 0 600 360'><rect width='600' height='360' fill='%230f2b27'/><path d='M50 300 Q150 200 300 240 T550 220' stroke='%232b8f85' stroke-width='4' fill='none' opacity='0.4'/><circle cx='300' cy='140' r='50' fill='%232b8f85' opacity='0.25'/><path d='M290 120 h20 v30 h-20 z' fill='%235eead4'/><path d='M300 150 v35 M293 185 h14' stroke='%235eead4' stroke-width='4' stroke-linecap='round'/><text x='300' y='240' fill='%23e6f7f4' font-family='sans-serif' font-size='16' font-weight='bold' text-anchor='middle'>Hostel Block C · Main Washroom Valve Leak</text><text x='300' y='265' fill='%2394a3b8' font-family='sans-serif' font-size='13' text-anchor='middle'>Reported evidence photo · 09:30 AM</text></svg>";
+
+const sampleStreetlightBefore = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='360' viewBox='0 0 600 360'><rect width='600' height='360' fill='%23111827'/><circle cx='300' cy='130' r='55' fill='%23f59e0b' opacity='0.15'/><path d='M296 90 h8 v140 h-8 z' fill='%2394a3b8'/><path d='M280 90 h40 l-8 -20 h-24 z' fill='%23f59e0b'/><text x='300' y='260' fill='%23fef08a' font-family='sans-serif' font-size='16' font-weight='bold' text-anchor='middle'>North Gate · Streetlight #04 Non-functional</text><text x='300' y='285' fill='%2394a3b8' font-family='sans-serif' font-size='13' text-anchor='middle'>High safety concern after sunset</text></svg>";
+
+const sampleWasteBefore = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='360' viewBox='0 0 600 360'><rect width='600' height='360' fill='%232b1310'/><rect x='230' y='120' width='65' height='90' rx='8' fill='%23ef4444' opacity='0.6'/><rect x='315' y='120' width='65' height='90' rx='8' fill='%23f97316' opacity='0.6'/><text x='300' y='250' fill='%23fee2e2' font-family='sans-serif' font-size='16' font-weight='bold' text-anchor='middle'>Arts Building · Waste Overflow (Before)</text><text x='300' y='275' fill='%23cbd5e1' font-family='sans-serif' font-size='13' text-anchor='middle'>Reported at 11:20 AM</text></svg>";
+
+const sampleWasteAfter = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='360' viewBox='0 0 600 360'><rect width='600' height='360' fill='%23064e3b'/><circle cx='300' cy='140' r='45' fill='%2310b981' opacity='0.3'/><path d='M285 140 l10 10 l20 -22' stroke='%2334d399' stroke-width='6' fill='none' stroke-linecap='round'/><text x='300' y='235' fill='%23d1fae5' font-family='sans-serif' font-size='16' font-weight='bold' text-anchor='middle'>Area Sanitized & Bins Cleared (Verified)</text><text x='300' y='260' fill='%23a7f3d0' font-family='sans-serif' font-size='13' text-anchor='middle'>Sanitation Crew Proof · 02:10 PM</text></svg>";
+
 const initialComplaints: Complaint[] = [
   {
     id: "CS-2048",
@@ -106,6 +115,10 @@ const initialComplaints: Complaint[] = [
     createdAt: "Today, 09:42 AM",
     reporter: "Arjun",
     campusName: "Dibrugarh University",
+    image: sampleWaterBefore,
+    upvotes: 18,
+    adminResponseEn: "Maintenance plumber dispatched with replacement valve. Estimated completion by 2:00 PM.",
+    adminResponseAs: "নতুন ভাল্ভ সহ মেৰামতি কৰ্মী দল প্ৰেৰণ কৰা হৈছে। দুপৰীয়া ২ বজাৰ ভিতৰত সম্পূৰ্ণ হ'ব।",
   },
   {
     id: "CS-2047",
@@ -122,6 +135,7 @@ const initialComplaints: Complaint[] = [
     createdAt: "Today, 08:18 AM",
     reporter: "Rituraj Gogoi",
     campusName: "Dibrugarh University",
+    upvotes: 8,
   },
   {
     id: "CS-2046",
@@ -138,6 +152,8 @@ const initialComplaints: Complaint[] = [
     createdAt: "Yesterday, 06:31 PM",
     reporter: "Bikram Saikia",
     campusName: "Dibrugarh University",
+    image: sampleStreetlightBefore,
+    upvotes: 24,
   },
   {
     id: "CS-2045",
@@ -154,6 +170,12 @@ const initialComplaints: Complaint[] = [
     createdAt: "Yesterday, 02:10 PM",
     reporter: "Priyanka Chetia",
     campusName: "Dibrugarh University",
+    image: sampleWasteBefore,
+    resolvedImage: sampleWasteAfter,
+    resolutionNotes: "Sanitation crew emptied all bins, sprayed disinfectant, and replaced liners.",
+    upvotes: 12,
+    adminResponseEn: "Sanitation completed and inspected by supervisor. Verified clean with photo proof.",
+    adminResponseAs: "পৰিষ্কাৰ-পৰিচ্ছন্নতা সম্পূৰ্ণ কৰা হৈছে আৰু পৰিদৰ্শক দ্বাৰা সত্যায়িত। ফটো প্ৰমাণ আপলোড কৰা হৈছে।",
   },
 ];
 
@@ -162,7 +184,7 @@ const copy = {
     overview: "Overview",
     complaints: "My complaints",
     services: "Student services",
-    analytics: "Campus Pulse",
+    analytics: "Campus Updates",
     notifications: "Notifications",
     settings: "Settings",
     submit: "Report an issue",
@@ -198,7 +220,7 @@ const copy = {
     overview: "অভাৰভিউ",
     complaints: "মোৰ অভিযোগসমূহ",
     services: "শিক্ষাৰ্থী সেৱাসমূহ",
-    analytics: "কেম্পাছ পাল্ছ",
+    analytics: "কেম্পাছ আপডেট",
     notifications: "জাননীসমূহ",
     settings: "ছেটিংছ",
     submit: "সমস্যা জনাওক",
@@ -347,7 +369,7 @@ export default function CivicSenseApp() {
     setComplaintsCursor(null);
     setHasMoreComplaints(false);
     const controller = new AbortController();
-    const params = new URLSearchParams({ limit: "50" });
+    const params = new URLSearchParams({ limit: "50", includeEvidence: "true" });
     if (search.trim()) params.set("search", search.trim());
     if (statusFilter !== "All") params.set("status", statusFilter);
     const timer = window.setTimeout(() => {
@@ -382,7 +404,7 @@ export default function CivicSenseApp() {
     const controller = new AbortController();
     loadMoreController.current = controller;
     try {
-      const params = new URLSearchParams({ limit: "50", cursor: complaintsCursor });
+      const params = new URLSearchParams({ limit: "50", cursor: complaintsCursor, includeEvidence: "true" });
       if (search.trim()) params.set("search", search.trim());
       if (statusFilter !== "All") params.set("status", statusFilter);
       const response = await fetch(`/api/complaints?${params.toString()}`, { signal: controller.signal });
@@ -457,6 +479,41 @@ export default function CivicSenseApp() {
       fetch("/api/notifications").then((result) => result.json()).then((data) => { if (Array.isArray(data.notifications)) setNotifications(data.notifications); }).catch(() => undefined);
     }
     return true;
+  }
+
+  async function handleUpvote(id: string) {
+    const previous = complaints.find((item) => item.id === id);
+    const nextUpvotes = (previous?.upvotes ?? 1) + 1;
+    const nextPriority: Priority =
+      nextUpvotes >= 15 ? "Critical" : nextUpvotes >= 5 && previous?.priority !== "Critical" ? "High" : previous?.priority || "Medium";
+
+    setComplaints((current) =>
+      current.map((item) => (item.id === id ? { ...item, upvotes: nextUpvotes, priority: nextPriority } : item))
+    );
+    setSelected((current) =>
+      current && current.id === id ? { ...current, upvotes: nextUpvotes, priority: nextPriority } : current
+    );
+
+    try {
+      const response = await fetch(`/api/complaints/${encodeURIComponent(id)}/upvote`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (typeof data.upvotes === "number") {
+          setComplaints((current) =>
+            current.map((item) =>
+              item.id === id ? { ...item, upvotes: data.upvotes, priority: (data.priority as Priority) || item.priority } : item
+            )
+          );
+          setSelected((current) =>
+            current && current.id === id ? { ...current, upvotes: data.upvotes, priority: (data.priority as Priority) || current.priority } : current
+          );
+        }
+      }
+    } catch {
+      // optimistic update maintained
+    }
   }
 
   async function addComplaint(complaint: Complaint) {
@@ -552,11 +609,11 @@ export default function CivicSenseApp() {
           <ChevronDown size={16} className="muted-icon" />
         </div>
           <div className="sidebar-label">{isAdmin ? t.administration : t.workspace}</div>
-        {isAdmin ? <nav className="main-nav admin-nav"><NavButton active={view === "admin"} icon={<ShieldCheck size={18} />} label={t.adminPanel} count={complaints.filter((item) => item.campusName === activeCampus.name && item.status !== "Resolved").length} onClick={() => navTo("admin")} /><NavButton active={view === "analytics"} icon={<Lightbulb size={18} />} label="Campus Pulse" onClick={() => navTo("analytics")} /></nav> : <nav className="main-nav">
+        {isAdmin ? <nav className="main-nav admin-nav"><NavButton active={view === "admin"} icon={<ShieldCheck size={18} />} label={t.adminPanel} count={complaints.filter((item) => item.campusName === activeCampus.name && item.status !== "Resolved").length} onClick={() => navTo("admin")} /><NavButton active={view === "analytics"} icon={<Activity size={18} />} label={t.analytics} onClick={() => navTo("analytics")} /></nav> : <nav className="main-nav">
            <NavButton active={view === "overview"} icon={<LayoutDashboard size={18} />} label={t.overview} onClick={() => navTo("overview")} />
            <NavButton active={view === "complaints"} icon={<MessageSquareText size={18} />} label={t.complaints} count={counts.active} onClick={() => navTo("complaints")} />
            <NavButton active={view === "services"} icon={<BookOpen size={18} />} label={t.services} onClick={() => navTo("services")} />
-           <NavButton active={view === "analytics"} icon={<Lightbulb size={18} />} label={t.analytics} onClick={() => navTo("analytics")} />
+           <NavButton active={view === "analytics"} icon={<Activity size={18} />} label={t.analytics} onClick={() => navTo("analytics")} />
           <NavButton active={view === "notifications"} icon={<Bell size={18} />} label={t.notifications} count={counts.unread} onClick={() => { navTo("notifications"); markNotificationsRead(); }} />
         </nav>}
         <div className="sidebar-spacer" />
@@ -590,7 +647,16 @@ export default function CivicSenseApp() {
           {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} loading={complaintsLoading} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => openForm()} onViewAll={() => navTo("complaints")} onPulse={() => navTo("analytics")} onSelect={setSelected} />}
           {view === "complaints" && <ComplaintsView t={t} complaints={filteredComplaints} loading={complaintsLoading} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onSubmit={() => openForm()} onSelect={setSelected} onUpdateStatus={updateStatus} role={role} />}
           {view === "services" && <StudentServices language={language} onSubmit={openForm} />}
-          {view === "analytics" && <CampusPulse campusName={activeCampus.name} />}
+          {view === "analytics" && (
+            <CampusPulse
+              campusName={activeCampus.name}
+              complaints={complaints.filter((item) => item.campusName === activeCampus.name)}
+              language={language}
+              onSelect={setSelected}
+              onUpvote={handleUpvote}
+              role={role}
+            />
+          )}
           {view === "notifications" && <Notifications notifications={notifications} loading={notificationsLoading} onRead={markNotificationsRead} />}
           {view === "settings" && <SettingsView language={language} setLanguage={setLanguage} role={role} setRole={setRole} onSave={() => notify("Preferences saved successfully.")} />}
           {hasMoreComplaints && view === "complaints" && <div className="load-more-reports"><button className="secondary-button" disabled={loadingMoreComplaints} onClick={() => void loadMoreComplaints()}>{loadingMoreComplaints ? <><Loader2 size={16} className="spin" /> Loading reports...</> : "Load older reports"}</button></div>}
@@ -1161,8 +1227,8 @@ function NavButton({ active, icon, label, count, onClick }: { active: boolean; i
 
 function MobileBottomNav({ isAdmin, view, counts, onNavigate, labels }: { isAdmin: boolean; view: View; counts: { active: number; unread: number }; onNavigate: (view: View) => void; labels: typeof copy.en }) {
   const items: Array<{ view: View; label: string; icon: React.ReactNode; count?: number }> = isAdmin
-    ? [{ view: "admin", label: "Admin", icon: <ShieldCheck size={18} />, count: counts.active }, { view: "analytics", label: "Campus Pulse", icon: <Lightbulb size={18} /> }, { view: "settings", label: "Settings", icon: <Settings size={18} /> }]
-    : [{ view: "overview", label: labels.overview, icon: <LayoutDashboard size={18} /> }, { view: "complaints", label: labels.complaints, icon: <MessageSquareText size={18} />, count: counts.active }, { view: "services", label: labels.services, icon: <BookOpen size={18} /> }, { view: "analytics", label: labels.analytics, icon: <Lightbulb size={18} /> }, { view: "notifications", label: labels.notifications, icon: <Bell size={18} />, count: counts.unread }, { view: "settings", label: labels.settings, icon: <Settings size={18} /> }];
+    ? [{ view: "admin", label: "Admin", icon: <ShieldCheck size={18} />, count: counts.active }, { view: "analytics", label: labels.analytics, icon: <Activity size={18} /> }, { view: "settings", label: "Settings", icon: <Settings size={18} /> }]
+    : [{ view: "overview", label: labels.overview, icon: <LayoutDashboard size={18} /> }, { view: "complaints", label: labels.complaints, icon: <MessageSquareText size={18} />, count: counts.active }, { view: "services", label: labels.services, icon: <BookOpen size={18} /> }, { view: "analytics", label: labels.analytics, icon: <Activity size={18} /> }, { view: "notifications", label: labels.notifications, icon: <Bell size={18} />, count: counts.unread }, { view: "settings", label: labels.settings, icon: <Settings size={18} /> }];
   return <nav className={`mobile-bottom-nav ${isAdmin ? "mobile-bottom-admin" : ""}`} aria-label="Mobile navigation">{items.map((item) => <button key={item.view} className={view === item.view ? "mobile-bottom-active" : ""} onClick={() => onNavigate(item.view)} aria-label={item.label}>{item.icon}<span>{item.label}</span>{item.count ? <b>{item.count}</b> : null}</button>)}</nav>;
 }
 
@@ -1719,7 +1785,7 @@ function Overview({ t, language, userName, campus, complaints, loading, counts, 
         <div className="panel-heading"><div><h2>{t.quickActions}</h2><p>What would you like to do?</p></div><Sparkles size={20} className="sparkle-icon" /></div>
         <button className="action-card action-primary" onClick={onSubmit}><div className="action-icon"><Plus size={21} /></div><div><b>{t.report}</b><span>Tell us what needs attention</span></div><ArrowRight size={18} /></button>
         <button className="action-card" onClick={onViewAll}><div className="action-icon action-icon-blue"><FileText size={20} /></div><div><b>{t.track}</b><span>View updates and history</span></div><ArrowRight size={18} /></button>
-        <button className="action-card" onClick={onPulse}><div className="action-icon action-icon-purple"><Bot size={20} /></div><div><b>{t.insights}</b><span>Ask about real campus reports</span></div><ArrowRight size={18} /></button>
+        <button className="action-card" onClick={onPulse}><div className="action-icon action-icon-purple"><Activity size={20} /></div><div><b>{language === "as" ? "কেম্পাছ আপডেট আৰু ফীড" : "Campus Updates & Feed"}</b><span>{language === "as" ? "চলি থকা কাম, ফটো প্ৰমাণ আৰু সমৰ্থন" : "Live repairs, photo proof & student votes"}</span></div><ArrowRight size={18} /></button>
         <div className="tip-box"><Lightbulb size={17} /><div><b>Tip for a faster resolution</b><span>Add a clear location and a photo when reporting an issue.</span></div></div>
       </div>
     </section>

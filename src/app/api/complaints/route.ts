@@ -64,6 +64,7 @@ export async function GET(request: Request) {
   const search = (searchParams.get("search") || "").trim().slice(0, 120);
   const requestedStatus = searchParams.get("status");
   const status = ["Submitted", "In progress", "Resolved"].includes(String(requestedStatus)) ? requestedStatus : undefined;
+  const includeEvidence = searchParams.get("includeEvidence") === "true";
   const campusName = session.campusName;
   const responseNotification = {
     where: { userId: session.id, title: { in: ["Campus administrator responded", "কেম্পাছ প্ৰশাসনৰ উত্তৰ"] } },
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
   const hasMore = complaints.length > limit;
   const page = complaints.slice(0, limit);
   return NextResponse.json({
-    complaints: page.map((complaint) => toClientComplaint(complaint, false)),
+    complaints: page.map((complaint) => toClientComplaint(complaint, includeEvidence)),
     nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null,
     hasMore,
     endpoints: { create: "POST /api/complaints", update: "PATCH /api/complaints/:id" },
