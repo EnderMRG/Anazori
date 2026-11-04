@@ -39,6 +39,12 @@ import {
   UserRound,
   Users,
   X,
+  BadgeCheck,
+  CreditCard,
+  GraduationCap,
+  Mail,
+  Phone,
+  Zap,
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -531,7 +537,7 @@ export default function CivicSenseApp() {
           {view === "admin" && isAdmin && <AdminControlRoom language={language} campus={activeCampus} complaints={complaints.filter((item) => item.campusName === activeCampus.name)} loading={complaintsLoading} onSelect={setSelected} onUpdateComplaint={updateComplaint} />}
           {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} loading={complaintsLoading} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => openForm()} onViewAll={() => navTo("complaints")} onSelect={setSelected} />}
           {view === "complaints" && <ComplaintsView t={t} complaints={filteredComplaints} loading={complaintsLoading} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onSubmit={() => openForm()} onSelect={setSelected} onUpdateStatus={updateStatus} role={role} />}
-          {view === "services" && <StudentServices onSubmit={openForm} />}
+          {view === "services" && <StudentServices language={language} onSubmit={openForm} />}
           {view === "analytics" && <Analytics complaints={complaints} />}
           {view === "notifications" && <Notifications notifications={notifications} loading={notificationsLoading} onRead={markNotificationsRead} />}
           {view === "settings" && <SettingsView language={language} setLanguage={setLanguage} role={role} setRole={setRole} onSave={() => notify("Preferences saved successfully.")} />}
@@ -653,19 +659,535 @@ function MobileBottomNav({ isAdmin, view, counts, onNavigate, labels }: { isAdmi
   return <nav className={`mobile-bottom-nav ${isAdmin ? "mobile-bottom-admin" : ""}`} aria-label="Mobile navigation">{items.map((item) => <button key={item.view} className={view === item.view ? "mobile-bottom-active" : ""} onClick={() => onNavigate(item.view)} aria-label={item.label}>{item.icon}<span>{item.label}</span>{item.count ? <b>{item.count}</b> : null}</button>)}</nav>;
 }
 
-function StudentServices({ onSubmit }: { onSubmit: (serviceCategory?: string) => void }) {
-  const services = [
-    { label: "Library services", description: "Books, fines, access, and library accounts.", icon: <BookOpen size={19} />, accent: "blue" },
-    { label: "Examinations & marksheets", description: "Exam forms, results, marksheets, and corrections.", icon: <FileText size={19} />, accent: "purple" },
-    { label: "Exam fees", description: "Payment issues, receipts, and exam fee questions.", icon: <span className="service-symbol">₹</span>, accent: "orange" },
-    { label: "Semester fees", description: "Tuition payments, dues, and fee receipts.", icon: <span className="service-symbol">₹</span>, accent: "green" },
-    { label: "Registration & enrollment", description: "Course registration, admission, and enrollment help.", icon: <Users size={19} />, accent: "blue" },
-    { label: "Certificates & documents", description: "Bonafide, migration, transcripts, and certificates.", icon: <FileText size={19} />, accent: "purple" },
-    { label: "Scholarships & financial aid", description: "Scholarship applications, stipends, and grants.", icon: <Sparkles size={19} />, accent: "orange" },
-    { label: "Student welfare & counselling", description: "Wellbeing, counselling, accessibility, and support.", icon: <Users size={19} />, accent: "green" },
-    { label: "Hostel & student support", description: "Student support services and hostel administration.", icon: <Building2 size={19} />, accent: "blue" },
+type ServiceItem = {
+  label: string;
+  labelAs: string;
+  department: string;
+  departmentAs: string;
+  description: string;
+  descriptionAs: string;
+  icon: React.ReactNode;
+  accent: "purple" | "blue" | "green" | "orange";
+  tags: string[];
+  tagsAs: string[];
+  sla: string;
+  slaAs: string;
+};
+
+type ServiceGroup = {
+  id: "academic" | "finance" | "living";
+  title: string;
+  titleAs: string;
+  subtitle: string;
+  subtitleAs: string;
+  accentClass: string;
+  items: ServiceItem[];
+};
+
+function StudentServices({ language = "en", onSubmit }: { language?: Language; onSubmit: (serviceCategory?: string) => void }) {
+  const isAssamese = language === "as";
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState<"all" | "academic" | "finance" | "living">("all");
+
+  const serviceGroups: ServiceGroup[] = [
+    {
+      id: "academic",
+      title: "Academic & Examination Services",
+      titleAs: "শৈক্ষিক আৰু পৰীক্ষা সেৱা",
+      subtitle: "Official requests routed directly to Examination Cell, Registrar & Academic Section",
+      subtitleAs: "পৰীক্ষা শাখা, পঞ্জীয়ক আৰু শৈক্ষিক কাৰ্যালয়ৰ প্ৰত্যক্ষ সেৱা",
+      accentClass: "service-tag-purple",
+      items: [
+        {
+          label: "Examinations & marksheets",
+          labelAs: "পৰীক্ষা আৰু নম্বৰতালিকা",
+          department: "Examination Cell",
+          departmentAs: "পৰীক্ষা শাখা",
+          description: "Exam forms, results, marksheet corrections, re-evaluation, admit cards, and grade queries.",
+          descriptionAs: "পৰীক্ষাৰ প্ৰ-পত্ৰ, ফলাফল, নম্বৰতালিকা সংশোধন, পুনৰীক্ষণ আৰু এডমিট কাৰ্ড।",
+          icon: <GraduationCap size={20} />,
+          accent: "purple",
+          tags: ["Exam Forms", "Marksheet Correction", "Re-evaluation", "Results"],
+          tagsAs: ["পৰীক্ষা ফৰ্ম", "মাৰ্কশ্বীট সংশোধন", "পুনৰীক্ষণ"],
+          sla: "24–48h SLA",
+          slaAs: "২৪–৪৮ ঘণ্টা",
+        },
+        {
+          label: "Registration & enrollment",
+          labelAs: "পঞ্জীয়ন আৰু নামভৰ্তি",
+          department: "Academic Section",
+          departmentAs: "শৈক্ষিক শাখা",
+          description: "Semester registration, course enrollment, subject changes, course codes, and admission help.",
+          descriptionAs: "ষাণ্মাসিক পঞ্জীয়ন, নামভৰ্তিৰ তথ্য, বিষয় সলনি আৰু ক'ৰ্ছ পঞ্জীয়ন।",
+          icon: <Users size={20} />,
+          accent: "blue",
+          tags: ["Course Add/Drop", "Enrollment ID", "Admission", "Semester Reg"],
+          tagsAs: ["বিষয় সলনি", "নামভৰ্তি", "ক'ৰ্ছ পঞ্জীয়ন"],
+          sla: "1–2 Days",
+          slaAs: "১–২ দিন",
+        },
+        {
+          label: "Certificates & documents",
+          labelAs: "প্ৰমাণপত্ৰ আৰু নথিপত্ৰ",
+          department: "Registrar's Office",
+          departmentAs: "পঞ্জীয়কৰ কাৰ্যালয়",
+          description: "Bonafide certificates, migration, transcripts, duplicate degree certificates, and official verifications.",
+          descriptionAs: "বোনাফাইড প্ৰমাণপত্ৰ, প্ৰব্ৰজন (Migration), ট্ৰান্সক্ৰিপ্ট আৰু নথিপত্ৰ সত্যাপন।",
+          icon: <FileText size={20} />,
+          accent: "purple",
+          tags: ["Bonafide", "Migration", "Official Transcripts", "Verification"],
+          tagsAs: ["বোনাফাইড", "প্ৰব্ৰজন", "ট্ৰান্সক্ৰিপ্ট", "সত্যাপন"],
+          sla: "2–3 Days",
+          slaAs: "২–৩ দিন",
+        },
+      ],
+    },
+    {
+      id: "finance",
+      title: "Fees & Financial Support",
+      titleAs: "মাচুল আৰু বিত্তীয় সাহায্য",
+      subtitle: "Official requests routed to Accounts, Finance Section & Scholarship Cell",
+      subtitleAs: "হিচাপ, বিত্ত আৰু বৃত্তি শাখাৰ প্ৰত্যক্ষ সেৱা",
+      accentClass: "service-tag-green",
+      items: [
+        {
+          label: "Semester fees",
+          labelAs: "ষাণ্মাসিক মাচুল",
+          department: "Accounts & Finance",
+          departmentAs: "হিচাপ আৰু বিত্ত শাখা",
+          description: "Tuition fee payments, dues clearance, fee receipts, payment reconciliation, and ledger updates.",
+          descriptionAs: "ষাণ্মাসিক টিউচন মাচুল, ৰচিদ ডাউনলোড, বকেয়া পৰিশোধ আৰু একাউণ্ট আপডেট।",
+          icon: <CreditCard size={20} />,
+          accent: "green",
+          tags: ["Tuition Fee", "Fee Receipts", "Dues Clearance", "Payment Portal"],
+          tagsAs: ["টিউচন মাচুল", "মাচুল ৰচিদ", "বকেয়া", "পেমেন্ট"],
+          sla: "24h Response",
+          slaAs: "২৪ ঘণ্টা",
+        },
+        {
+          label: "Exam fees",
+          labelAs: "পৰীক্ষা মাচুল",
+          department: "Accounts & Finance",
+          departmentAs: "হিচাপ আৰু বিত্ত শাখা",
+          description: "Exam fee payment issues, failed UPI/bank deductions, challan receipts, and exam portal unlocking.",
+          descriptionAs: "পৰীক্ষা মাচুল পৰিশোধৰ সমস্যা, বিফল লেনদেন (Failed UPI) আৰু চালান সত্যাপন।",
+          icon: <span className="service-symbol">₹</span>,
+          accent: "orange",
+          tags: ["Payment Failure", "Challan", "Receipt Missing", "Form Lock"],
+          tagsAs: ["বিফল লেনদেন", "চালান", "ৰচিদ সমস্যা"],
+          sla: "Same-Day Priority",
+          slaAs: "সেইদিনাই অগ্ৰাধিকাৰ",
+        },
+        {
+          label: "Scholarships & financial aid",
+          labelAs: "বৃত্তি আৰু আৰ্থিক সাহায্য",
+          department: "Student Welfare & Scholarship Cell",
+          departmentAs: "বৃত্তি আৰু ছাত্ৰ কল্যাণ শাখা",
+          description: "National Scholarship Portal (NSP), state merit stipends, fee waivers, minority grants, and disbursement.",
+          descriptionAs: "ৰাষ্ট্ৰীয় আৰু ৰাজ্যিক বৃত্তি (NSP), মেধা বৃত্তি, মাচুল ৰেহাই আৰু আৰ্থিক অনুদান।",
+          icon: <Sparkles size={20} />,
+          accent: "orange",
+          tags: ["NSP Portal", "State Stipend", "Merit Aid", "Disbursement"],
+          tagsAs: ["ৰাষ্ট্ৰীয় বৃত্তি", "ষ্টাইপেণ্ড", "মেধা বৃত্তি"],
+          sla: "2–4 Days",
+          slaAs: "২–৪ দিন",
+        },
+      ],
+    },
+    {
+      id: "living",
+      title: "Campus Living & Student Welfare",
+      titleAs: "কেম্পাছ জীৱন আৰু কল্যাণ",
+      subtitle: "Official requests routed to Hostel Administration, Central Library & Dean of Students",
+      subtitleAs: "হোষ্টেল প্ৰশাসন, কেন্দ্ৰীয় গ্ৰন্থাগাৰ আৰু ছাত্ৰ কল্যাণ সেৱা",
+      accentClass: "service-tag-blue",
+      items: [
+        {
+          label: "Hostel & student support",
+          labelAs: "হোষ্টেল আৰু ছাত্ৰাবাস সেৱা",
+          department: "Hostel Administration & Estate",
+          departmentAs: "হোষ্টেল প্ৰশাসন আৰু এষ্টেট",
+          description: "Hostel seat allotment, room maintenance, mess queries, warden permissions, and living amenities.",
+          descriptionAs: "ছাত্ৰাবাসৰ আসন আৱণ্টন, কোঠাৰ মেৰামতি, মেছ আৰু ৱাৰ্ডেনৰ অনুমতি।",
+          icon: <Building2 size={20} />,
+          accent: "blue",
+          tags: ["Room Allotment", "Maintenance", "Mess Query", "Warden Desk"],
+          tagsAs: ["আসন আৱণ্টন", "মেৰামতি", "মেছ", "ৱাৰ্ডেন"],
+          sla: "24h Action",
+          slaAs: "২৪ ঘণ্টা কাৰ্যব্যৱস্থা",
+        },
+        {
+          label: "Library services",
+          labelAs: "গ্ৰন্থাগাৰ সেৱা",
+          department: "Lakshminath Bezbaroa Central Library",
+          departmentAs: "লক্ষ্মীনাথ বেজবৰুৱা কেন্দ্ৰীয় গ্ৰন্থাগাৰ",
+          description: "Library access cards, book issues & renewals, fine appeals, OPAC accounts, and digital repository access.",
+          descriptionAs: "গ্ৰন্থাগাৰ একাউণ্ট, কিতাপ নৱীকৰণ, জৰিমনা ৰেহাই আৰু ই-সম্পদ।",
+          icon: <BookOpen size={20} />,
+          accent: "blue",
+          tags: ["Library Card", "Book Renewal", "Fine Waiver", "E-Resources"],
+          tagsAs: ["লাইব্ৰেৰী কাৰ্ড", "কিতাপ নৱীকৰণ", "জৰিমনা ৰেহাই"],
+          sla: "Instant / 24h",
+          slaAs: "তৎকালীন / ২৪ ঘণ্টা",
+        },
+        {
+          label: "Student welfare & counselling",
+          labelAs: "শিক্ষাৰ্থী কল্যাণ আৰু পৰামৰ্শ",
+          department: "Dean of Student Affairs & Health Centre",
+          departmentAs: "শিক্ষাৰ্থী কল্যাণ বিষয়া আৰু স্বাস্থ্য কেন্দ্ৰ",
+          description: "Confidential mental health counselling, disability accessibility, anti-ragging support, and student wellbeing.",
+          descriptionAs: "গোপনীয় মানসিক স্বাস্থ্য পৰামৰ্শ, বিশেষ সুবিধা, ৰেগিং বিৰোধী সুৰক্ষা আৰু কল্যাণ।",
+          icon: <Users size={20} />,
+          accent: "green",
+          tags: ["Counselling", "Accessibility", "Anti-Ragging", "Confidential"],
+          tagsAs: ["পৰামৰ্শ", "সুবিধা", "ৰেগিং বিৰোধী", "গোপনীয়"],
+          sla: "Confidential / Priority",
+          slaAs: "গোপনীয় / তৎকালীন",
+        },
+      ],
+    },
   ];
-  return <div className="page-enter student-services-page"><section className="page-heading-row"><div><div className="eyebrow"><BookOpen size={14} /> STUDENT SUPPORT</div><h1>Student Services</h1><p>Choose a service below to open the right form for your request.</p></div></section><div className="services-intro"><div className="service-intro-icon"><Sparkles size={22} /></div><div><b>One place for every student query</b><p>Each service has its own prompts and fields so the right university office gets the details it needs.</p></div></div><section className="student-service-grid">{services.map((service) => <button className="student-service-card" key={service.label} onClick={() => onSubmit(service.label)}><span className={`service-card-icon service-card-${service.accent}`}>{service.icon}</span><span className="student-service-copy"><b>{service.label}</b><span>{service.description}</span></span><ArrowRight size={16} className="row-arrow" /></button>)}</section></div>;
+
+  const filterTabLabels = [
+    { key: "all", label: "All Services", labelAs: "সকলো সেৱা", count: 9 },
+    { key: "academic", label: "Academic & Exams", labelAs: "শৈক্ষিক আৰু পৰীক্ষা", count: 3 },
+    { key: "finance", label: "Fees & Financial Aid", labelAs: "মাচুল আৰু সাহায্য", count: 3 },
+    { key: "living", label: "Campus Living & Welfare", labelAs: "কেম্পাছ জীৱন", count: 3 },
+  ];
+
+  const query = searchTerm.trim().toLowerCase();
+
+  const filteredGroups = serviceGroups
+    .filter((g) => selectedGroup === "all" || g.id === selectedGroup)
+    .map((group) => {
+      if (!query) return group;
+      const matchedItems = group.items.filter((item) => {
+        return (
+          item.label.toLowerCase().includes(query) ||
+          item.labelAs.toLowerCase().includes(query) ||
+          item.department.toLowerCase().includes(query) ||
+          item.departmentAs.toLowerCase().includes(query) ||
+          item.description.toLowerCase().includes(query) ||
+          item.descriptionAs.toLowerCase().includes(query) ||
+          item.tags.some((t) => t.toLowerCase().includes(query)) ||
+          item.tagsAs.some((t) => t.toLowerCase().includes(query))
+        );
+      });
+      return { ...group, items: matchedItems };
+    })
+    .filter((g) => g.items.length > 0);
+
+  const totalFilteredCount = filteredGroups.reduce((acc, g) => acc + g.items.length, 0);
+
+  return (
+    <div className="page-enter student-services-page">
+      {/* 1. Page Header & Hero */}
+      <section className="student-services-hero">
+        <div className="page-heading-row" style={{ marginBottom: 0 }}>
+          <div>
+            <div className="eyebrow">
+              <BookOpen size={14} /> {isAssamese ? "ডিব্ৰুগড় বিশ্ববিদ্যালয় // কেন্দ্ৰীয় শিক্ষাৰ্থী সেৱা কেন্দ্ৰ" : "DIBRUGARH UNIVERSITY // CENTRAL STUDENT SERVICES"}
+            </div>
+            <h1>{isAssamese ? "শিক্ষাৰ্থী সেৱা আৰু শৈক্ষিক কেন্দ্ৰ" : "Student Services & Academic Helpdesk"}</h1>
+            <p>
+              {isAssamese
+                ? "পোনপটীয়া আবেদন, AI নিৰ্দেশনা আৰু ক্ষিপ্ৰ নিৰীক্ষণৰ সৈতে বিশ্ববিদ্যালয়ৰ বিভাগসমূহৰ ডিজিটেল সেৱা।"
+                : "Direct digital requests to university departments with automated AI validation and real-time status tracking."}
+            </p>
+          </div>
+        </div>
+
+        {/* Live Search Bar */}
+        <div className="student-services-search-bar">
+          <Search size={18} color="var(--teal)" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={
+              isAssamese
+                ? "সেৱা, বিভাগ বা সমস্যা বিচাৰক (যেনে 'মাৰ্কশ্বীট', 'মাচুল ৰচিদ', 'বোনাফাইড', 'হোষ্টেল')..."
+                : 'Search 9 university services by name, department, or keyword (e.g. "marksheet", "fee receipt", "bonafide", "hostel")...'
+            }
+          />
+          {searchTerm && (
+            <button className="search-clear-btn" onClick={() => setSearchTerm("")} title={isAssamese ? "সন্ধান মচক" : "Clear search"}>
+              <X size={13} />
+            </button>
+          )}
+        </div>
+
+        {/* Category Filter Pills */}
+        <div className="services-filter-tabs">
+          {filterTabLabels.map((tab) => (
+            <button
+              key={tab.key}
+              className={`service-filter-tab ${selectedGroup === tab.key ? "active" : ""}`}
+              onClick={() => setSelectedGroup(tab.key as any)}
+            >
+              <span>{isAssamese ? tab.labelAs : tab.label}</span>
+              <em>{tab.count}</em>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* 2. Key Guarantees & SLA Strip */}
+      <section className="services-guarantees-strip">
+        <div className="guarantee-card">
+          <div className="guarantee-icon guarantee-icon-purple">
+            <Zap size={18} />
+          </div>
+          <div className="guarantee-copy">
+            <b>{isAssamese ? "পোনপটীয়া শাখা সংযোগ" : "Direct Cell Routing"}</b>
+            <span>{isAssamese ? "পৰীক্ষা, বিত্ত আৰু পঞ্জীয়ক শাখা" : "Pre-mapped to Exam, Accounts & Registrar"}</span>
+          </div>
+        </div>
+        <div className="guarantee-card">
+          <div className="guarantee-icon guarantee-icon-teal">
+            <Clock3 size={18} />
+          </div>
+          <div className="guarantee-copy">
+            <b>{isAssamese ? "২৪–৪৮ ঘণ্টা কাৰ্যকাল" : "24–48h Response SLA"}</b>
+            <span>{isAssamese ? "স্থিতিৰ আপডেটৰ সৈতে ক্ষিপ্ৰ সমাধান" : "Tracked response window with updates"}</span>
+          </div>
+        </div>
+        <div className="guarantee-card">
+          <div className="guarantee-icon guarantee-icon-blue">
+            <Sparkles size={18} />
+          </div>
+          <div className="guarantee-copy">
+            <b>{isAssamese ? "দ্বি-ভাষিক AI সহায়ক" : "Bilingual AI Guidance"}</b>
+            <span>{isAssamese ? "অসমীয়া আৰু ইংৰাজী ভাষাত পৰীক্ষা" : "Assamese & English field prompts"}</span>
+          </div>
+        </div>
+        <div className="guarantee-card">
+          <div className="guarantee-icon guarantee-icon-green">
+            <BadgeCheck size={18} />
+          </div>
+          <div className="guarantee-copy">
+            <b>{isAssamese ? "লাইভ নিৰীক্ষণ ক্ৰিয়া" : "Live Docket Tracking"}</b>
+            <span>{isAssamese ? "প্ৰতিটো আবেদনৰ বাবে সুকীয়া আইডি" : "Unique ID generated with dashboard logs"}</span>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Main 2-Column Responsive Layout */}
+      <div className="student-services-layout">
+        {/* Left / Main Column: Categorized Services */}
+        <div className="services-main-col">
+          {filteredGroups.length === 0 ? (
+            <div className="no-services-found">
+              <CircleHelp size={32} color="var(--muted)" />
+              <b>{isAssamese ? "কোনো সেৱা বিচাৰি পোৱা নগল" : "No services found matching your search"}</b>
+              <p>
+                {isAssamese
+                  ? `"${searchTerm}" ৰ বাবে কোনো ফলাফল নাই। অনুগ্ৰহ কৰি অন্য শব্দ ব্যৱহাৰ কৰক।`
+                  : `No results for "${searchTerm}". Try checking your spelling or clearing filters.`}
+              </p>
+              <button
+                className="secondary-button"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedGroup("all");
+                }}
+              >
+                {isAssamese ? "সকলো সেৱা দেখুৱাওক" : "Show All Services"}
+              </button>
+            </div>
+          ) : (
+            filteredGroups.map((group) => (
+              <section key={group.id} className="service-group-section">
+                <div className="service-group-head">
+                  <div className="service-group-head-left">
+                    <span className={`service-group-tag ${group.accentClass}`} />
+                    <div>
+                      <h2>{isAssamese ? group.titleAs : group.title}</h2>
+                      <p>{isAssamese ? group.subtitleAs : group.subtitle}</p>
+                    </div>
+                  </div>
+                  <span className="service-group-badge">
+                    {group.items.length} {isAssamese ? "সেৱা" : "services"}
+                  </span>
+                </div>
+
+                <div className="service-cards-grid">
+                  {group.items.map((service) => (
+                    <button
+                      key={service.label}
+                      className="modern-service-card"
+                      onClick={() => onSubmit(service.label)}
+                    >
+                      <div>
+                        <div className="modern-service-card-head">
+                          <span className={`service-card-icon-wrap ${service.accent}`}>
+                            {service.icon}
+                          </span>
+                          <span className="card-sla-badge">{isAssamese ? service.slaAs : service.sla}</span>
+                        </div>
+
+                        <div className="modern-service-card-content">
+                          <span className="card-dept-badge">{isAssamese ? service.departmentAs : service.department}</span>
+                          <h3>{isAssamese ? service.labelAs : service.label}</h3>
+                          <p>{isAssamese ? service.descriptionAs : service.description}</p>
+                          <div className="modern-service-card-tags">
+                            {(isAssamese ? service.tagsAs : service.tags).map((tag) => (
+                              <span key={tag} className="service-pill-tag">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="modern-service-card-footer">
+                        <span className="card-action-hint">
+                          {isAssamese ? "আবেদন ফৰ্ম খোলক" : "Open Service Form"}
+                          <ArrowRight size={13} />
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
+        </div>
+
+        {/* Right Column: Fast Track Shortcuts & University Directory */}
+        <aside className="services-side-col">
+          {/* Fast-Track Card */}
+          <div className="services-sidebar-card">
+            <h3 className="sidebar-card-title">
+              <Zap size={16} color="var(--orange)" />
+              <div>
+                {isAssamese ? "দ্ৰুত সেৱা লিংক" : "Fast-Track Services"}
+                <span>{isAssamese ? "সঘনাই বিচৰা আৱেদনসমূহ" : "Top requested student forms"}</span>
+              </div>
+            </h3>
+            <div className="fast-track-list">
+              <button
+                className="fast-track-btn"
+                onClick={() => onSubmit("Certificates & documents")}
+              >
+                <div className="fast-track-btn-copy">
+                  <span>📄 {isAssamese ? "বোনাফাইড প্ৰমাণপত্ৰ" : "Bonafide Certificate"}</span>
+                  <small>{isAssamese ? "পঞ্জীয়কৰ কাৰ্যালয়" : "Registrar's Office"}</small>
+                </div>
+                <ArrowRight size={14} color="var(--muted)" />
+              </button>
+              <button
+                className="fast-track-btn"
+                onClick={() => onSubmit("Examinations & marksheets")}
+              >
+                <div className="fast-track-btn-copy">
+                  <span>🎓 {isAssamese ? "নম্বৰতালিকা সংশোধন / পুনৰীক্ষণ" : "Marksheet Correction / Re-eval"}</span>
+                  <small>{isAssamese ? "পৰীক্ষা শাখা" : "Examination Cell"}</small>
+                </div>
+                <ArrowRight size={14} color="var(--muted)" />
+              </button>
+              <button
+                className="fast-track-btn"
+                onClick={() => onSubmit("Semester fees")}
+              >
+                <div className="fast-track-btn-copy">
+                  <span>💳 {isAssamese ? "মাচুল ৰচিদ / বিফল পেমেন্ট" : "Semester Fee Receipt Issue"}</span>
+                  <small>{isAssamese ? "হিচাপ আৰু বিত্ত" : "Accounts & Finance"}</small>
+                </div>
+                <ArrowRight size={14} color="var(--muted)" />
+              </button>
+              <button
+                className="fast-track-btn"
+                onClick={() => onSubmit("Hostel & student support")}
+              >
+                <div className="fast-track-btn-copy">
+                  <span>🏠 {isAssamese ? "হোষ্টেল কোঠাৰ মেৰামতি" : "Hostel Room Maintenance"}</span>
+                  <small>{isAssamese ? "ছাত্ৰাবাস এষ্টেট" : "Hostel Estate Cell"}</small>
+                </div>
+                <ArrowRight size={14} color="var(--muted)" />
+              </button>
+            </div>
+          </div>
+
+          {/* 3-Step Lifecycle Card */}
+          <div className="services-sidebar-card">
+            <h3 className="sidebar-card-title">
+              <Sparkles size={16} color="var(--teal)" />
+              <div>
+                {isAssamese ? "কেনেদৰে আবেদন কৰিব" : "How It Works"}
+                <span>{isAssamese ? "৩টা সহজ পদক্ষেপ" : "3-step verified workflow"}</span>
+              </div>
+            </h3>
+            <div className="lifecycle-steps">
+              <div className="lifecycle-step">
+                <span className="step-num">1</span>
+                <div className="step-copy">
+                  <b>{isAssamese ? "সেৱা নিৰ্বাচন কৰক" : "Select Service"}</b>
+                  <span>{isAssamese ? "আপোনাৰ আৱশ্যকীয় বিভাগ ফৰ্ম বাছনি কৰক।" : "Choose the right department form above."}</span>
+                </div>
+              </div>
+              <div className="lifecycle-step">
+                <span className="step-num">2</span>
+                <div className="step-copy">
+                  <b>{isAssamese ? "AI নিৰ্দেশনাৰে পূৰণ কৰক" : "Fill with AI Validation"}</b>
+                  <span>{isAssamese ? "বিৱৰণ আৰু নথিপত্ৰ যোগ দিয়ক।" : "Add details; AI verifies fields and docs."}</span>
+                </div>
+              </div>
+              <div className="lifecycle-step">
+                <span className="step-num">3</span>
+                <div className="step-copy">
+                  <b>{isAssamese ? "লাইভ স্থিতি নিৰীক্ষণ কৰক" : "Track to Resolution"}</b>
+                  <span>{isAssamese ? "ট্ৰেকিং আইডিৰে প্ৰত্যক্ষ সমাধান পাওক।" : "Receive docket ID and real-time alerts."}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Helpdesk Directory Card */}
+          <div className="services-sidebar-card">
+            <h3 className="sidebar-card-title">
+              <Building2 size={16} color="var(--blue)" />
+              <div>
+                {isAssamese ? "বিশ্ববিদ্যালয়ৰ সাহায্য কেন্দ্ৰ" : "University Helpdesk"}
+                <span>{isAssamese ? "প্ৰশাসনিক যোগাযোগ" : "Administrative directory"}</span>
+              </div>
+            </h3>
+            <div className="helpdesk-info-list">
+              <div className="helpdesk-info-item">
+                <MapPin size={15} color="var(--teal)" style={{ marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <strong>{isAssamese ? "অৱস্থান" : "Location"}</strong>
+                  {isAssamese ? "প্ৰশাসনিক ভৱন, ডিব্ৰুগড় বিশ্ববিদ্যালয়" : "Administrative Block, Dibrugarh University"}
+                </div>
+              </div>
+              <div className="helpdesk-info-item">
+                <Clock3 size={15} color="var(--teal)" style={{ marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <strong>{isAssamese ? "কাৰ্যালয়ৰ সময়" : "Working Hours"}</strong>
+                  {isAssamese ? "সোম – শুক্ৰ: পুৱা ৯:৩০ – বিয়লি ৫:০০" : "Monday – Friday: 9:30 AM – 5:00 PM"}
+                </div>
+              </div>
+              <div className="helpdesk-info-item">
+                <Phone size={15} color="var(--teal)" style={{ marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <strong>{isAssamese ? "দূৰভাষ" : "Central Enquiry"}</strong>
+                  +91 373 2370243 (Ext. 204)
+                </div>
+              </div>
+              <div className="helpdesk-info-item">
+                <Mail size={15} color="var(--teal)" style={{ marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <strong>{isAssamese ? "ই-মেইল" : "Helpdesk Email"}</strong>
+                  studenthelp@dibru.ac.in
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
 }
 
 function Overview({ t, language, userName, campus, complaints, loading, counts, onSubmit, onViewAll, onSelect }: { t: typeof copy.en; language: Language; userName: string; campus: Campus; complaints: Complaint[]; loading: boolean; counts: { active: number; resolved: number; unread: number }; onSubmit: () => void; onViewAll: () => void; onSelect: (complaint: Complaint) => void }) {
