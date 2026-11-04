@@ -177,6 +177,14 @@ const copy = {
     noComplaints: "No complaints found",
     admin: "Admin view",
     student: "Student view",
+    adminPanel: "Admin panel",
+    administration: "Administration",
+    adminRole: "Administrator",
+    studentRole: "Student portal",
+    workspace: "Workspace",
+    account: "Account",
+    manage: "Manage",
+    logOut: "Log out",
   },
   as: {
     overview: "অভাৰভিউ",
@@ -205,6 +213,14 @@ const copy = {
     noComplaints: "কোনো অভিযোগ পোৱা নগ’ল",
     admin: "এডমিন ভিউ",
     student: "শিক্ষাৰ্থী ভিউ",
+    adminPanel: "এডমিন পেনেল",
+    administration: "প্ৰশাসন",
+    adminRole: "প্ৰশাসক",
+    studentRole: "শিক্ষাৰ্থী প’ৰ্টেল",
+    workspace: "কাৰ্যক্ষেত্ৰ",
+    account: "একাউণ্ট",
+    manage: "ব্যৱস্থাপনা",
+    logOut: "লগ আউট",
   },
 };
 
@@ -474,11 +490,11 @@ export default function CivicSenseApp() {
         </div>
         <div className="workspace-switcher">
           <div className="workspace-icon"><Building2 size={17} /></div>
-          <div className="workspace-copy"><b>{activeCampus.name}</b><span>{isAdmin ? "Administrator" : "Student portal"}</span></div>
+          <div className="workspace-copy"><b>{activeCampus.name}</b><span>{isAdmin ? t.adminRole : t.studentRole}</span></div>
           <ChevronDown size={16} className="muted-icon" />
         </div>
-          <div className="sidebar-label">{isAdmin ? "Administration" : "Workspace"}</div>
-        {isAdmin ? <nav className="main-nav admin-nav"><NavButton active={view === "admin"} icon={<ShieldCheck size={18} />} label="Admin panel" count={complaints.filter((item) => item.campusName === activeCampus.name && item.status !== "Resolved").length} onClick={() => navTo("admin")} /></nav> : <nav className="main-nav">
+          <div className="sidebar-label">{isAdmin ? t.administration : t.workspace}</div>
+        {isAdmin ? <nav className="main-nav admin-nav"><NavButton active={view === "admin"} icon={<ShieldCheck size={18} />} label={t.adminPanel} count={complaints.filter((item) => item.campusName === activeCampus.name && item.status !== "Resolved").length} onClick={() => navTo("admin")} /></nav> : <nav className="main-nav">
            <NavButton active={view === "overview"} icon={<LayoutDashboard size={18} />} label={t.overview} onClick={() => navTo("overview")} />
            <NavButton active={view === "complaints"} icon={<MessageSquareText size={18} />} label={t.complaints} count={counts.active} onClick={() => navTo("complaints")} />
            <NavButton active={view === "services"} icon={<BookOpen size={18} />} label={t.services} onClick={() => navTo("services")} />
@@ -486,7 +502,7 @@ export default function CivicSenseApp() {
           <NavButton active={view === "notifications"} icon={<Bell size={18} />} label={t.notifications} count={counts.unread} onClick={() => { navTo("notifications"); markNotificationsRead(); }} />
         </nav>}
         <div className="sidebar-spacer" />
-        <div className="sidebar-label">{isAdmin ? "Account" : "Manage"}</div>
+        <div className="sidebar-label">{isAdmin ? t.account : t.manage}</div>
         <nav className="main-nav">
           <NavButton active={view === "settings"} icon={<Settings size={18} />} label={t.settings} onClick={() => navTo("settings")} />
           {!isAdmin && <NavButton active={false} icon={<CircleHelp size={18} />} label="Help centre" onClick={() => notify("Help centre is coming soon.")} />}
@@ -496,14 +512,14 @@ export default function CivicSenseApp() {
           <div className="user-copy"><b>{displayName}</b><span>{currentUser?.email || "Sign in to save your reports"}</span></div>
           <MoreHorizontal size={18} className="muted-icon" />
         </button>
-        <button className="sidebar-logout" onClick={signOut}><LogOut size={16} /><span>Log out</span></button>
+        <button className="sidebar-logout" onClick={signOut}><LogOut size={16} /><span>{t.logOut}</span></button>
       </aside>
       {currentUser && isProtectedRoute && <MobileBottomNav isAdmin={isAdmin} view={view} counts={counts} onNavigate={navTo} labels={t} />}
 
       <main className="main-content">
         <header className="topbar">
           <button className="icon-button mobile-menu" onClick={() => setShowMobileNav(true)} aria-label="Open menu"><Menu size={21} /></button>
-          <div className="breadcrumb"><span>{activeCampus.name}</span><span className="breadcrumb-separator">/</span><b>{view === "overview" ? t.overview : view === "complaints" ? t.complaints : view === "services" ? t.services : view === "analytics" ? t.analytics : view === "notifications" ? t.notifications : view === "admin" ? "Admin panel" : t.settings}</b></div>
+          <div className="breadcrumb"><span>{activeCampus.name}</span><span className="breadcrumb-separator">/</span><b>{view === "overview" ? t.overview : view === "complaints" ? t.complaints : view === "services" ? t.services : view === "analytics" ? t.analytics : view === "notifications" ? t.notifications : view === "admin" ? t.adminPanel : t.settings}</b></div>
           <div className="top-actions">
             <button className="language-toggle" onClick={() => setLanguage(language === "en" ? "as" : "en")}><Languages size={16} /><span>{language === "en" ? "অসমীয়া" : "English"}</span></button>
             {!isAdmin && <button className="icon-button notification-button" onClick={() => { navTo("notifications"); markNotificationsRead(); }} aria-label="Notifications"><Bell size={19} />{counts.unread > 0 && <span className="notification-dot" />}</button>}
@@ -512,7 +528,7 @@ export default function CivicSenseApp() {
         </header>
 
         <div className="content-wrap">
-          {view === "admin" && isAdmin && <AdminControlRoom campus={activeCampus} complaints={complaints.filter((item) => item.campusName === activeCampus.name)} loading={complaintsLoading} onSelect={setSelected} onUpdateComplaint={updateComplaint} />}
+          {view === "admin" && isAdmin && <AdminControlRoom language={language} campus={activeCampus} complaints={complaints.filter((item) => item.campusName === activeCampus.name)} loading={complaintsLoading} onSelect={setSelected} onUpdateComplaint={updateComplaint} />}
           {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} loading={complaintsLoading} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => openForm()} onViewAll={() => navTo("complaints")} onSelect={setSelected} />}
           {view === "complaints" && <ComplaintsView t={t} complaints={filteredComplaints} loading={complaintsLoading} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onSubmit={() => openForm()} onSelect={setSelected} onUpdateStatus={updateStatus} role={role} />}
           {view === "services" && <StudentServices onSubmit={openForm} />}
