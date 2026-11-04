@@ -502,12 +502,12 @@ export default function CampusPulse({
                           ? "সমাধান হোৱা প্ৰমাণসহ"
                           : "Resolved with Proof"
                         : item.status === "In progress"
-                        ? isAssamese
-                          ? "কাম চলি আছে"
-                          : "Work Dispatched"
-                        : isAssamese
-                        ? "AI পৰ্যালোচিত"
-                        : "AI Triaged"}
+                          ? isAssamese
+                            ? "কাম চলি আছে"
+                            : "Work Dispatched"
+                          : isAssamese
+                            ? "AI পৰ্যালোচিত"
+                            : "AI Triaged"}
                     </span>
                     <span className={`priority priority-${item.priority.toLowerCase()}`}>
                       <span className="priority-dot" />
@@ -638,8 +638,8 @@ export default function CampusPulse({
                           ? "সমৰ্থিত"
                           : "Upvoted"
                         : isAssamese
-                        ? "সমৰ্থন কৰক"
-                        : "Upvote"}
+                          ? "সমৰ্থন কৰক"
+                          : "Upvote"}
                     </span>
                   </button>
 

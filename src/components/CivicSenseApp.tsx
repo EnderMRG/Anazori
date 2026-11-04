@@ -640,7 +640,9 @@ export default function CivicSenseApp() {
         </button>
         <button className="sidebar-logout" onClick={signOut}><LogOut size={16} /><span>{t.logOut}</span></button>
       </aside>
-      {currentUser && isProtectedRoute && <MobileBottomNav isAdmin={isAdmin} view={view} counts={counts} onNavigate={navTo} labels={t} />}
+      {currentUser && isProtectedRoute && !selected && !showForm && (
+        <MobileBottomNav isAdmin={isAdmin} view={view} counts={counts} onNavigate={navTo} labels={t} />
+      )}
 
       <main className="main-content">
         <header className="topbar">
