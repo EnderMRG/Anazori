@@ -46,10 +46,11 @@ import {
   Phone,
   Zap,
 } from "lucide-react";
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getCampus, type Campus } from "@/lib/campuses";
 import AdminControlRoom from "@/components/AdminControlRoom";
+import CampusPulse from "@/components/CampusPulse";
 import { ComplaintDetailWorkflow, ComplaintFormWorkflow } from "@/components/ComplaintWorkflow";
 import PwaInstallButton from "@/components/PwaInstallButton";
 import { NotificationSkeleton, Skeleton, WorkspaceSkeleton } from "@/components/SkeletonLoaders";
@@ -160,7 +161,7 @@ const copy = {
     overview: "Overview",
     complaints: "My complaints",
     services: "Student services",
-    analytics: "Campus insights",
+    analytics: "Campus Pulse",
     notifications: "Notifications",
     settings: "Settings",
     submit: "Report an issue",
@@ -175,7 +176,7 @@ const copy = {
     quickActions: "Quick actions",
     report: "Report an issue",
     track: "Track my reports",
-    insights: "Campus insights",
+    insights: "Campus Pulse",
     notificationsTitle: "Notifications",
     newReport: "New complaint",
     search: "Search complaints...",
@@ -196,7 +197,7 @@ const copy = {
     overview: "অভাৰভিউ",
     complaints: "মোৰ অভিযোগসমূহ",
     services: "শিক্ষাৰ্থী সেৱাসমূহ",
-    analytics: "কেম্পাছৰ তথ্য",
+    analytics: "কেম্পাছ পাল্ছ",
     notifications: "জাননীসমূহ",
     settings: "ছেটিংছ",
     submit: "সমস্যা জনাওক",
@@ -211,7 +212,7 @@ const copy = {
     quickActions: "দ্ৰুত কাৰ্যসমূহ",
     report: "সমস্যা জনাওক",
     track: "মোৰ প্ৰতিবেদন চাওক",
-    insights: "কেম্পাছৰ তথ্য",
+    insights: "কেম্পাছ পাল্ছ",
     notificationsTitle: "জাননীসমূহ",
     newReport: "নতুন অভিযোগ",
     search: "অভিযোগ বিচাৰক...",
@@ -260,6 +261,10 @@ export default function CivicSenseApp() {
   const [role, setRole] = useState<"student" | "admin">("student");
   const [complaints, setComplaints] = useState(initialComplaints);
   const [complaintsLoading, setComplaintsLoading] = useState(true);
+  const [complaintsCursor, setComplaintsCursor] = useState<string | null>(null);
+  const [hasMoreComplaints, setHasMoreComplaints] = useState(false);
+  const [loadingMoreComplaints, setLoadingMoreComplaints] = useState(false);
+  const loadMoreController = useRef<AbortController | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [selected, setSelected] = useState<Complaint | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -277,6 +282,10 @@ export default function CivicSenseApp() {
   const displayName = currentUser?.name || "Arjun";
   const activeCampus = selectedCampus || getCampus(currentUser?.campusName);
   const isAdmin = currentUser?.role === "admin";
+  const notify = useCallback((message: string) => {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 3200);
+  }, []);
 
   useEffect(() => {
     fetch("/api/campuses").then((response) => response.json()).then((data) => {
@@ -331,17 +340,64 @@ export default function CivicSenseApp() {
 
   useEffect(() => {
     if (!isProtectedRoute || !currentUser) return;
+    loadMoreController.current?.abort();
+    setLoadingMoreComplaints(false);
     setComplaintsLoading(true);
-    fetch(`/api/complaints?campusName=${encodeURIComponent(activeCampus.name)}`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (Array.isArray(data.complaints) && data.complaints.length) {
-          setComplaints((current) => [...data.complaints, ...current.filter((item) => !data.complaints.some((saved: Complaint) => saved.id === item.id))] as Complaint[]);
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => setComplaintsLoading(false));
-  }, [activeCampus.name, currentUser, isProtectedRoute]);
+    setComplaintsCursor(null);
+    setHasMoreComplaints(false);
+    const controller = new AbortController();
+    const params = new URLSearchParams({ limit: "50" });
+    if (search.trim()) params.set("search", search.trim());
+    if (statusFilter !== "All") params.set("status", statusFilter);
+    const timer = window.setTimeout(() => {
+      fetch(`/api/complaints?${params.toString()}`, { signal: controller.signal })
+        .then(async (response) => {
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Unable to load reports.");
+          return data;
+        })
+        .then((data) => {
+          setComplaints(Array.isArray(data.complaints) ? data.complaints : []);
+          setComplaintsCursor(typeof data.nextCursor === "string" ? data.nextCursor : null);
+          setHasMoreComplaints(Boolean(data.hasMore));
+        })
+        .catch((error) => {
+          if (!controller.signal.aborted) notify(error instanceof Error ? error.message : "Unable to load reports.");
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setComplaintsLoading(false);
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+      loadMoreController.current?.abort();
+    };
+  }, [currentUser, isProtectedRoute, notify, search, statusFilter]);
+
+  async function loadMoreComplaints() {
+    if (!complaintsCursor || loadingMoreComplaints) return;
+    setLoadingMoreComplaints(true);
+    const controller = new AbortController();
+    loadMoreController.current = controller;
+    try {
+      const params = new URLSearchParams({ limit: "50", cursor: complaintsCursor });
+      if (search.trim()) params.set("search", search.trim());
+      if (statusFilter !== "All") params.set("status", statusFilter);
+      const response = await fetch(`/api/complaints?${params.toString()}`, { signal: controller.signal });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load older reports.");
+      if (Array.isArray(data.complaints)) {
+        setComplaints((current) => [...current, ...data.complaints.filter((item: Complaint) => !current.some((saved) => saved.id === item.id))]);
+      }
+      setComplaintsCursor(typeof data.nextCursor === "string" ? data.nextCursor : null);
+      setHasMoreComplaints(Boolean(data.hasMore));
+    } catch (error) {
+      if (!controller.signal.aborted) notify(error instanceof Error ? error.message : "Unable to load older reports.");
+    } finally {
+      if (!controller.signal.aborted) setLoadingMoreComplaints(false);
+    }
+  }
 
   useEffect(() => {
     if (!currentUser || currentUser.role === "admin") return;
@@ -370,11 +426,6 @@ export default function CivicSenseApp() {
     resolved: complaints.filter((item) => item.status === "Resolved").length,
     unread: notifications.filter((item) => item.unread).length,
   }), [complaints, notifications]);
-
-  function notify(message: string) {
-    setToast(message);
-    window.setTimeout(() => setToast(""), 3200);
-  }
 
   function updateStatus(id: string, status: Status) {
     updateComplaint(id, { status });
@@ -500,7 +551,7 @@ export default function CivicSenseApp() {
           <ChevronDown size={16} className="muted-icon" />
         </div>
           <div className="sidebar-label">{isAdmin ? t.administration : t.workspace}</div>
-        {isAdmin ? <nav className="main-nav admin-nav"><NavButton active={view === "admin"} icon={<ShieldCheck size={18} />} label={t.adminPanel} count={complaints.filter((item) => item.campusName === activeCampus.name && item.status !== "Resolved").length} onClick={() => navTo("admin")} /></nav> : <nav className="main-nav">
+        {isAdmin ? <nav className="main-nav admin-nav"><NavButton active={view === "admin"} icon={<ShieldCheck size={18} />} label={t.adminPanel} count={complaints.filter((item) => item.campusName === activeCampus.name && item.status !== "Resolved").length} onClick={() => navTo("admin")} /><NavButton active={view === "analytics"} icon={<Lightbulb size={18} />} label="Campus Pulse" onClick={() => navTo("analytics")} /></nav> : <nav className="main-nav">
            <NavButton active={view === "overview"} icon={<LayoutDashboard size={18} />} label={t.overview} onClick={() => navTo("overview")} />
            <NavButton active={view === "complaints"} icon={<MessageSquareText size={18} />} label={t.complaints} count={counts.active} onClick={() => navTo("complaints")} />
            <NavButton active={view === "services"} icon={<BookOpen size={18} />} label={t.services} onClick={() => navTo("services")} />
@@ -535,12 +586,13 @@ export default function CivicSenseApp() {
 
         <div className="content-wrap">
           {view === "admin" && isAdmin && <AdminControlRoom language={language} campus={activeCampus} complaints={complaints.filter((item) => item.campusName === activeCampus.name)} loading={complaintsLoading} onSelect={setSelected} onUpdateComplaint={updateComplaint} />}
-          {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} loading={complaintsLoading} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => openForm()} onViewAll={() => navTo("complaints")} onSelect={setSelected} />}
+          {view === "overview" && <Overview t={t} language={language} userName={displayName} campus={activeCampus} complaints={filteredComplaints} loading={complaintsLoading} counts={{ ...counts, active: filteredComplaints.filter((item) => item.status !== "Resolved").length, resolved: filteredComplaints.filter((item) => item.status === "Resolved").length }} onSubmit={() => openForm()} onViewAll={() => navTo("complaints")} onPulse={() => navTo("analytics")} onSelect={setSelected} />}
           {view === "complaints" && <ComplaintsView t={t} complaints={filteredComplaints} loading={complaintsLoading} search={search} setSearch={setSearch} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onSubmit={() => openForm()} onSelect={setSelected} onUpdateStatus={updateStatus} role={role} />}
           {view === "services" && <StudentServices language={language} onSubmit={openForm} />}
-          {view === "analytics" && <Analytics complaints={complaints} />}
+          {view === "analytics" && <CampusPulse campusName={activeCampus.name} />}
           {view === "notifications" && <Notifications notifications={notifications} loading={notificationsLoading} onRead={markNotificationsRead} />}
           {view === "settings" && <SettingsView language={language} setLanguage={setLanguage} role={role} setRole={setRole} onSave={() => notify("Preferences saved successfully.")} />}
+          {hasMoreComplaints && view === "complaints" && <div className="load-more-reports"><button className="secondary-button" disabled={loadingMoreComplaints} onClick={() => void loadMoreComplaints()}>{loadingMoreComplaints ? <><Loader2 size={16} className="spin" /> Loading reports...</> : "Load older reports"}</button></div>}
         </div>
       </main>
 
@@ -654,7 +706,7 @@ function NavButton({ active, icon, label, count, onClick }: { active: boolean; i
 
 function MobileBottomNav({ isAdmin, view, counts, onNavigate, labels }: { isAdmin: boolean; view: View; counts: { active: number; unread: number }; onNavigate: (view: View) => void; labels: typeof copy.en }) {
   const items: Array<{ view: View; label: string; icon: React.ReactNode; count?: number }> = isAdmin
-    ? [{ view: "admin", label: "Admin", icon: <ShieldCheck size={18} />, count: counts.active }, { view: "settings", label: "Settings", icon: <Settings size={18} /> }]
+    ? [{ view: "admin", label: "Admin", icon: <ShieldCheck size={18} />, count: counts.active }, { view: "analytics", label: "Campus Pulse", icon: <Lightbulb size={18} /> }, { view: "settings", label: "Settings", icon: <Settings size={18} /> }]
     : [{ view: "overview", label: labels.overview, icon: <LayoutDashboard size={18} /> }, { view: "complaints", label: labels.complaints, icon: <MessageSquareText size={18} />, count: counts.active }, { view: "services", label: labels.services, icon: <BookOpen size={18} /> }, { view: "analytics", label: labels.analytics, icon: <Lightbulb size={18} /> }, { view: "notifications", label: labels.notifications, icon: <Bell size={18} />, count: counts.unread }, { view: "settings", label: labels.settings, icon: <Settings size={18} /> }];
   return <nav className={`mobile-bottom-nav ${isAdmin ? "mobile-bottom-admin" : ""}`} aria-label="Mobile navigation">{items.map((item) => <button key={item.view} className={view === item.view ? "mobile-bottom-active" : ""} onClick={() => onNavigate(item.view)} aria-label={item.label}>{item.icon}<span>{item.label}</span>{item.count ? <b>{item.count}</b> : null}</button>)}</nav>;
 }
@@ -1190,7 +1242,7 @@ function StudentServices({ language = "en", onSubmit }: { language?: Language; o
   );
 }
 
-function Overview({ t, language, userName, campus, complaints, loading, counts, onSubmit, onViewAll, onSelect }: { t: typeof copy.en; language: Language; userName: string; campus: Campus; complaints: Complaint[]; loading: boolean; counts: { active: number; resolved: number; unread: number }; onSubmit: () => void; onViewAll: () => void; onSelect: (complaint: Complaint) => void }) {
+function Overview({ t, language, userName, campus, complaints, loading, counts, onSubmit, onViewAll, onPulse, onSelect }: { t: typeof copy.en; language: Language; userName: string; campus: Campus; complaints: Complaint[]; loading: boolean; counts: { active: number; resolved: number; unread: number }; onSubmit: () => void; onViewAll: () => void; onPulse: () => void; onSelect: (complaint: Complaint) => void }) {
   if (loading) return <WorkspaceSkeleton />;
   return <div className="page-enter">
     <section className="hero-row">
@@ -1212,7 +1264,7 @@ function Overview({ t, language, userName, campus, complaints, loading, counts, 
         <div className="panel-heading"><div><h2>{t.quickActions}</h2><p>What would you like to do?</p></div><Sparkles size={20} className="sparkle-icon" /></div>
         <button className="action-card action-primary" onClick={onSubmit}><div className="action-icon"><Plus size={21} /></div><div><b>{t.report}</b><span>Tell us what needs attention</span></div><ArrowRight size={18} /></button>
         <button className="action-card" onClick={onViewAll}><div className="action-icon action-icon-blue"><FileText size={20} /></div><div><b>{t.track}</b><span>View updates and history</span></div><ArrowRight size={18} /></button>
-        <button className="action-card" onClick={onViewAll}><div className="action-icon action-icon-purple"><Bot size={20} /></div><div><b>{t.insights}</b><span>See what is improving</span></div><ArrowRight size={18} /></button>
+        <button className="action-card" onClick={onPulse}><div className="action-icon action-icon-purple"><Bot size={20} /></div><div><b>{t.insights}</b><span>Ask about real campus reports</span></div><ArrowRight size={18} /></button>
         <div className="tip-box"><Lightbulb size={17} /><div><b>Tip for a faster resolution</b><span>Add a clear location and a photo when reporting an issue.</span></div></div>
       </div>
     </section>

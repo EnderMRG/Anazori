@@ -1,18 +1,24 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { isEvidenceDataUrl } from "@/lib/evidence";
 import { prisma } from "@/lib/prisma";
+import { isRateLimited } from "@/lib/redis";
+import { verifyResolutionToken } from "@/lib/resolution-token";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 function validImage(value: unknown) {
-  return typeof value === "string" && value.startsWith("data:image/") && value.length <= 12 * 1024 * 1024;
+  return typeof value === "string" && isEvidenceDataUrl(value);
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const session = await getSession();
   if (!session || session.role !== "admin") return NextResponse.json({ error: "Administrator access required." }, { status: 403 });
-  const updates = await request.json() as { status?: string; department?: string; priority?: string; resolvedImage?: string; resolvedImageUrl?: string; resolutionNotes?: string; adminResponseEn?: string; adminResponseAs?: string };
+  if (await isRateLimited(`complaint-update:${session.id}`, 60, 60)) {
+    return NextResponse.json({ error: "Update limit reached. Please try again later." }, { status: 429 });
+  }
+  const updates = await request.json() as { status?: string; department?: string; priority?: string; resolvedImage?: string; resolvedImageUrl?: string; resolutionNotes?: string; resolutionVerificationToken?: string; adminResponseEn?: string; adminResponseAs?: string };
   const existing = await prisma.complaint.findUnique({ where: { publicId: id } });
   if (!existing || existing.campusName !== session.campusName) return NextResponse.json({ error: "Complaint not found in your campus queue." }, { status: 404 });
   const root = existing.masterId ? await prisma.complaint.findUnique({ where: { id: existing.masterId } }) : existing;
@@ -20,8 +26,14 @@ export async function PATCH(request: Request, context: RouteContext) {
   const status = updates.status || existing.status;
   if (!["Submitted", "In progress", "Resolved"].includes(status)) return NextResponse.json({ error: "Unsupported complaint status." }, { status: 400 });
   const resolvedImageUrl = updates.resolvedImageUrl || updates.resolvedImage;
+  const evidenceImage = resolvedImageUrl || existing.resolvedImageUrl || root.resolvedImageUrl || "";
+  const existingEvidence = evidenceImage === existing.resolvedImageUrl || evidenceImage === root.resolvedImageUrl;
   if (status === "Resolved" && !root.resolvedImageUrl && !validImage(resolvedImageUrl)) return NextResponse.json({ error: "An after photo is required before resolving this complaint." }, { status: 400 });
-  if (resolvedImageUrl && !validImage(resolvedImageUrl)) return NextResponse.json({ error: "The after photo must be a supported image smaller than 8 MB." }, { status: 400 });
+  if (evidenceImage && !validImage(evidenceImage) && !existingEvidence) return NextResponse.json({ error: "The after photo must be a supported image smaller than 3 MB." }, { status: 400 });
+  const verificationMode = status === "Resolved" && evidenceImage && updates.resolutionVerificationToken
+    ? verifyResolutionToken(updates.resolutionVerificationToken, id, evidenceImage)
+    : null;
+  if (status === "Resolved" && !verificationMode) return NextResponse.json({ error: "Verify the before and after evidence before resolving this complaint." }, { status: 409 });
 
   const complaint = await prisma.$transaction(async (tx) => {
     const data = {
@@ -29,7 +41,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       department: updates.department || undefined,
       priority: updates.priority || undefined,
       resolvedImageUrl: resolvedImageUrl || undefined,
-      resolutionNotes: typeof updates.resolutionNotes === "string" ? updates.resolutionNotes.slice(0, 1000) : undefined,
+      resolutionNotes: typeof updates.resolutionNotes === "string"
+        ? [updates.resolutionNotes, verificationMode === "manual" ? "Manual evidence review confirmed by campus administrator." : ""].filter(Boolean).join(" ").slice(0, 1000)
+        : verificationMode === "manual" ? "Manual evidence review confirmed by campus administrator." : undefined,
     };
     const updated = await tx.complaint.update({ where: { publicId: id }, data, include: { user: { select: { name: true } } } });
     if (root.id !== existing.id) await tx.complaint.update({ where: { id: root.id }, data });
@@ -52,12 +66,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
     return updated;
   });
-  const savedComplaint = {
-    ...complaint,
+  const { imageUrl: _imageUrl, resolvedImageUrl: _resolvedImageUrl, ...savedComplaint } = complaint;
+  return NextResponse.json({ complaint: {
+    ...savedComplaint,
     ...(typeof updates.adminResponseEn === "string" ? { adminResponseEn: updates.adminResponseEn } : {}),
     ...(typeof updates.adminResponseAs === "string" ? { adminResponseAs: updates.adminResponseAs } : {}),
-  };
-  return NextResponse.json({ complaint: savedComplaint });
+  } });
 }
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -72,5 +86,11 @@ export async function GET(_request: Request, context: RouteContext) {
     select: { body: true },
   });
   const match = response?.body.match(/^English response:\n([\s\S]*?)\n\nঅসমীয়া উত্তৰ:\n([\s\S]*)$/u);
-  return NextResponse.json({ complaint: { ...complaint, ...(match ? { adminResponseEn: match[1], adminResponseAs: match[2] } : {}) } });
+  const { imageUrl, resolvedImageUrl, ...complaintDetails } = complaint;
+  return NextResponse.json({ complaint: {
+    ...complaintDetails,
+    image: imageUrl || undefined,
+    resolvedImage: resolvedImageUrl || undefined,
+    ...(match ? { adminResponseEn: match[1], adminResponseAs: match[2] } : {}),
+  } });
 }

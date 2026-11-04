@@ -101,10 +101,10 @@ export async function analyseIssueWithProvider(input: AnalysisInput, fallback = 
   const key = process.env.GEMINI_API_KEY;
   if (!key) return { result: fallback, provider: "local" };
   const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-  const parts: Array<Record<string, unknown>> = [{ text: `Analyse this campus grievance or student service request. It may concern physical campus conditions, administration, examinations, fees, library services, scholarships, or student welfare. Return only JSON with category, department, priority (Critical|High|Medium|Low), language (en|as|mixed), tags (2-4 hashtag strings), summaryEn, summaryAs, justification, and confidence (0-1). Preserve concrete details from the report in both summaries. Do not invent facts.\nTitle: ${input.title}\nDescription: ${input.description}\nLocation: ${input.location}` }];
+  const parts: Array<Record<string, unknown>> = [{ text: `Analyse this campus grievance or student service request. It may concern physical campus conditions, administration, examinations, fees, library services, scholarships, or student welfare. Return only JSON with category, department, priority (Critical|High|Medium|Low), language (en|as|mixed), tags (2-4 hashtag strings), summaryEn, summaryAs, justification, confidence (0-1), and imageAssessment. Preserve concrete details from the report in both summaries. If an image is attached, describe only visible details and say whether it appears relevant to the report; do not claim certainty beyond the image. If no image is attached, imageAssessment should be "No image attached." Do not invent facts.\nTitle: ${input.title}\nDescription: ${input.description}\nLocation: ${input.location}` }];
   if (input.image?.startsWith("data:")) {
     const match = input.image.match(/^data:([^;]+);base64,(.+)$/);
-    if (match && Buffer.byteLength(match[2], "base64") <= 8 * 1024 * 1024) parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
+    if (match && Buffer.byteLength(match[2], "base64") <= 3 * 1024 * 1024) parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
   }
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }), signal: AbortSignal.timeout(8_000) });
   if (!response.ok) throw new Error(`Gemini request failed with ${response.status}`);
@@ -113,13 +113,20 @@ export async function analyseIssueWithProvider(input: AnalysisInput, fallback = 
   const value = JSON.parse(raw) as Record<string, unknown>;
   const priority = ["Critical", "High", "Medium", "Low"].includes(String(value.priority)) ? String(value.priority) as IssuePriority : fallback.priority;
   const language = ["en", "as", "mixed"].includes(String(value.language)) ? String(value.language) as IssueLanguage : fallback.language;
-  const result = { ...fallback, category: typeof value.category === "string" ? value.category.slice(0, 80) : fallback.category, department: typeof value.department === "string" ? value.department.slice(0, 80) : fallback.department, priority, language, tags: Array.isArray(value.tags) ? value.tags.filter((tag): tag is string => typeof tag === "string").map((tag) => tag.startsWith("#") ? tag : `#${tag}`).slice(0, 4) : fallback.tags, summaryEn: typeof value.summaryEn === "string" ? value.summaryEn.slice(0, 500) : fallback.summaryEn, summaryAs: typeof value.summaryAs === "string" ? value.summaryAs.slice(0, 500) : fallback.summaryAs, justification: typeof value.justification === "string" ? value.justification.slice(0, 300) : fallback.justification, confidence: typeof value.confidence === "number" ? Math.max(0, Math.min(1, value.confidence)) : fallback.confidence };
-  return { provider: "gemini", result: await improveBilingualSummaries(input, result) };
-}
-
-export function canonicalTerms(value: string) {
-  const text = normalise(value);
-  return new Set(rules.filter((rule) => rule.aliases.some((alias) => hasAlias(text, alias))).map((rule) => rule.category));
+  const result = {
+    ...fallback,
+    category: typeof value.category === "string" && value.category.trim() ? value.category.trim().slice(0, 80) : fallback.category,
+    department: typeof value.department === "string" && value.department.trim() ? value.department.trim().slice(0, 80) : fallback.department,
+    priority,
+    language,
+    tags: Array.isArray(value.tags) ? Array.from(new Set(value.tags.filter((tag): tag is string => typeof tag === "string" && Boolean(tag.trim())).map((tag) => tag.trim().startsWith("#") ? tag.trim() : `#${tag.trim()}`))).slice(0, 4) : fallback.tags,
+    summaryEn: typeof value.summaryEn === "string" && value.summaryEn.trim() ? value.summaryEn.trim().slice(0, 500) : fallback.summaryEn,
+    summaryAs: typeof value.summaryAs === "string" && value.summaryAs.trim() ? value.summaryAs.trim().slice(0, 500) : fallback.summaryAs,
+    justification: typeof value.justification === "string" && value.justification.trim() ? value.justification.trim().slice(0, 300) : fallback.justification,
+    confidence: typeof value.confidence === "number" ? Math.max(0, Math.min(1, value.confidence)) : fallback.confidence,
+    imageAssessment: typeof value.imageAssessment === "string" && value.imageAssessment.trim() ? value.imageAssessment.trim().slice(0, 300) : fallback.imageAssessment,
+  };
+  return { provider: "gemini", result };
 }
 
 export function tokens(value: string) {
@@ -127,20 +134,20 @@ export function tokens(value: string) {
 }
 
 export function duplicateScore(current: AnalysisInput & { category?: string; tags?: string[] }, existing: AnalysisInput & { category?: string; tags?: string[] }) {
-  const currentLocation = normalise(current.location).trim();
-  const existingLocation = normalise(existing.location).trim();
+  const currentLocation = normalise(current.location).trim().replace(/\s+/g, " ");
+  const existingLocation = normalise(existing.location).trim().replace(/\s+/g, " ");
   const sameLocation = currentLocation.length > 0 && currentLocation === existingLocation;
-  const currentTerms = canonicalTerms(`${current.title} ${current.description} ${current.category || ""}`);
-  const existingTerms = canonicalTerms(`${existing.title} ${existing.description} ${existing.category || ""}`);
-  const sharedTerms = [...currentTerms].filter((term) => existingTerms.has(term)).length;
   const currentTokens = tokens(`${current.title} ${current.description}`);
   const existingTokens = tokens(`${existing.title} ${existing.description}`);
+  if (!currentTokens.size || !existingTokens.size) return 0;
   const sharedTokens = [...currentTokens].filter((token) => existingTokens.has(token)).length;
-  const tagOverlap = (current.tags || []).filter((tag) => (existing.tags || []).includes(tag)).length;
-  if (sameLocation && sharedTerms > 0) return 0.88;
-  if (sameLocation && tagOverlap > 0 && sharedTokens > 0) return 0.82;
-  if (sharedTerms > 0 && sharedTokens >= 2) return 0.8;
-  return 0;
+  const textSimilarity = sharedTokens / (currentTokens.size + existingTokens.size - sharedTokens);
+  if (textSimilarity < 0.2) return 0;
+
+  const sameCategory = normalise(current.category || "") === normalise(existing.category || "");
+  const sharedTags = (current.tags || []).filter((tag) => (existing.tags || []).includes(tag)).length;
+  const tagSimilarity = sharedTags / Math.max(current.tags?.length || 0, existing.tags?.length || 0, 1);
+  return Math.min(1, textSimilarity * 0.65 + Number(sameCategory) * 0.2 + Number(sameLocation) * 0.1 + tagSimilarity * 0.05);
 }
 
 export function escalatedPriority(upvotes: number, current: IssuePriority): IssuePriority {

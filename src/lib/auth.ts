@@ -6,7 +6,15 @@ export const SESSION_COOKIE = "civicsense_session";
 export type SessionUser = { id: string; name: string; email: string; role: string; campusName: string };
 
 function secret() {
-  return new TextEncoder().encode(process.env.AUTH_SECRET || "development-only-secret-change-me");
+  const configuredSecret = process.env.AUTH_SECRET;
+  if (!configuredSecret) {
+    if (process.env.NODE_ENV === "production") throw new Error("AUTH_SECRET must be configured in production.");
+    return new TextEncoder().encode("development-only-secret-change-me");
+  }
+  if (process.env.NODE_ENV === "production" && configuredSecret.length < 32) {
+    throw new Error("AUTH_SECRET must contain at least 32 characters in production.");
+  }
+  return new TextEncoder().encode(configuredSecret);
 }
 
 export async function createSession(user: SessionUser) {

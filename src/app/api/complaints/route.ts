@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { isEvidenceDataUrl } from "@/lib/evidence";
 import { prisma } from "@/lib/prisma";
+import { isRateLimited } from "@/lib/redis";
 import { analyseIssue, escalatedPriority, improveBilingualSummaries, type IssueAnalysis } from "@/lib/issue-analysis";
 
 type ComplaintWithUser = Prisma.ComplaintGetPayload<{ include: { user: { select: { name: true } } } }> & {
@@ -14,7 +16,7 @@ function publicResponse(body?: string) {
   return match ? { adminResponseEn: match[1], adminResponseAs: match[2] } : {};
 }
 
-function toClientComplaint(complaint: ComplaintWithUser) {
+function toClientComplaint(complaint: ComplaintWithUser, includeEvidence = true) {
   const response = publicResponse(complaint.notifications?.[0]?.body || complaint.master?.notifications[0]?.body);
   return {
     id: complaint.publicId,
@@ -26,8 +28,7 @@ function toClientComplaint(complaint: ComplaintWithUser) {
     department: complaint.department,
     status: complaint.status,
     location: complaint.location,
-    image: complaint.imageUrl || undefined,
-    resolvedImage: complaint.resolvedImageUrl || undefined,
+    ...(includeEvidence ? { image: complaint.imageUrl || undefined, resolvedImage: complaint.resolvedImageUrl || undefined } : {}),
     resolutionNotes: complaint.resolutionNotes || undefined,
     ...response,
     tags: complaint.tags,
@@ -46,30 +47,65 @@ function publicId() {
 }
 
 function validImage(value: unknown) {
-  return typeof value !== "string" || value === "" || (value.startsWith("data:image/") && value.length <= 12 * 1024 * 1024);
+  return typeof value !== "string" || value === "" || isEvidenceDataUrl(value);
 }
 
 export async function GET(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
-  const requestedCampus = new URL(request.url).searchParams.get("campusName");
-  const campusName = session.role === "admin" ? (requestedCampus || session.campusName) : session.campusName;
+  if (await isRateLimited(`complaint-list:${session.id}`, 120, 60)) {
+    return NextResponse.json({ error: "Report list request limit reached. Please try again later." }, { status: 429 });
+  }
+  const searchParams = new URL(request.url).searchParams;
+  const requestedLimit = Number(searchParams.get("limit") || 50);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, Math.floor(requestedLimit))) : 50;
+  const cursor = searchParams.get("cursor");
+  if (cursor && !/^[a-z0-9]+$/i.test(cursor)) return NextResponse.json({ error: "Invalid page cursor." }, { status: 400 });
+  const search = (searchParams.get("search") || "").trim().slice(0, 120);
+  const requestedStatus = searchParams.get("status");
+  const status = ["Submitted", "In progress", "Resolved"].includes(String(requestedStatus)) ? requestedStatus : undefined;
+  const campusName = session.campusName;
   const responseNotification = {
     where: { userId: session.id, title: { in: ["Campus administrator responded", "কেম্পাছ প্ৰশাসনৰ উত্তৰ"] } },
     orderBy: { createdAt: "desc" as const },
     take: 1,
   };
+  const where: Prisma.ComplaintWhereInput = {
+    campusName,
+    ...(status ? { status } : {}),
+    ...(search ? {
+      OR: [
+        { publicId: { contains: search, mode: "insensitive" } },
+        { title: { contains: search, mode: "insensitive" } },
+        { category: { contains: search, mode: "insensitive" } },
+        { department: { contains: search, mode: "insensitive" } },
+        { location: { contains: search, mode: "insensitive" } },
+      ],
+    } : {}),
+  };
   const complaints = await prisma.complaint.findMany({
-    where: { campusName },
-    include: { user: { select: { name: true } }, notifications: responseNotification, master: { include: { notifications: responseNotification } } },
-    orderBy: { createdAt: "desc" },
+      where,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      take: limit + 1,
+      include: { user: { select: { name: true } }, notifications: responseNotification, master: { include: { notifications: responseNotification } } },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+  const hasMore = complaints.length > limit;
+  const page = complaints.slice(0, limit);
+  return NextResponse.json({
+    complaints: page.map((complaint) => toClientComplaint(complaint, false)),
+    nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null,
+    hasMore,
+    endpoints: { create: "POST /api/complaints", update: "PATCH /api/complaints/:id" },
   });
-  return NextResponse.json({ complaints: complaints.map(toClientComplaint), endpoints: { create: "POST /api/complaints", update: "PATCH /api/complaints/:id" } });
 }
 
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  if (await isRateLimited(`complaint-create:${session.id}`, 10, 60 * 60)) {
+    return NextResponse.json({ error: "Report submission limit reached. Please try again later." }, { status: 429 });
+  }
   try {
     const body = await request.json() as Record<string, unknown>;
     const title = String(body.title || "Campus issue").trim().slice(0, 180);
@@ -77,7 +113,7 @@ export async function POST(request: Request) {
     const location = String(body.location || "Campus").trim().slice(0, 180);
     const image = typeof body.image === "string" ? body.image : "";
     if (!description || !location) return NextResponse.json({ error: "Description and location are required." }, { status: 400 });
-    if (!validImage(image)) return NextResponse.json({ error: "Evidence must be a supported image smaller than 8 MB." }, { status: 400 });
+    if (!validImage(image)) return NextResponse.json({ error: "Evidence must be a supported image smaller than 3 MB." }, { status: 400 });
 
     const fallback = analyseIssue({ title, description, location, image });
     let analysis: IssueAnalysis = {
@@ -107,7 +143,7 @@ export async function POST(request: Request) {
       }
       return tx.complaint.create({ data: { publicId: publicId(), userId: session.id, campusName: session.campusName, title, description, language: analysis.language, category: analysis.category, priority: analysis.priority, department: analysis.department, status: "Submitted", location, imageUrl: image || null, summaryEn: analysis.summaryEn, summaryAs: analysis.summaryAs, tags: analysis.tags, upvotes: 1 }, include: { user: { select: { name: true } } } });
     });
-    return NextResponse.json({ complaint: toClientComplaint(complaint), clustered: Boolean(master), masterId: master?.publicId || null }, { status: 201 });
+    return NextResponse.json({ complaint: toClientComplaint(complaint, false), clustered: Boolean(master), masterId: master?.publicId || null }, { status: 201 });
   } catch (error) {
     console.error("Complaint creation failed", error);
     return NextResponse.json({ error: "Unable to save the report." }, { status: 500 });

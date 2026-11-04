@@ -10,14 +10,17 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:setup": "prisma db execute --schema prisma/schema.prisma --file prisma/init.sql",
-    "db:seed": "node prisma/seed.cjs"
+    "db:seed": "node prisma/seed.cjs",
+    "test:load": "node scripts/load-test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "@upstash/redis": "^1.41.0",
     "bcryptjs": "^3.0.3",
+    "dotenv": "^18.0.9",
     "jose": "^6.2.15",
     "lucide-react": "^0.468.0",
     "next": "^15.1.3",

@@ -60,6 +60,7 @@ model Complaint {
   @@index([userId, createdAt])
   @@index([status])
   @@index([campusName, status])
+  @@index([campusName, createdAt, id])
   @@index([masterId])
 }
 

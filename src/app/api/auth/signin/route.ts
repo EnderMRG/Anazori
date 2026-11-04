@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { createSession, sessionCookie } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { clientRateLimitKey, isRateLimited } from "@/lib/redis";
 
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json();
+    if (await isRateLimited(clientRateLimitKey(request, "signin"), 20, 15 * 60)) {
+      return NextResponse.json({ error: "Too many sign-in attempts. Please try again later." }, { status: 429 });
+    }
     const cleanEmail = String(email || "").trim().toLowerCase();
     const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (!user || !(await bcrypt.compare(String(password || ""), user.passwordHash))) return NextResponse.json({ error: "Email or password is incorrect." }, { status: 401 });

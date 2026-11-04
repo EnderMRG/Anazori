@@ -1,194 +1,73 @@
-# CivicSense (PS-04) — Audit, Codebase Limitations & Technical Roadmap
+# CivicSense (PS-04) — Updated Audit Report
 
-## 1. Executive Summary
-This document outlines the current state, limitations, and technical enhancement roadmap for the **CivicSense** platform (`Anazori-26/Anazori`) in relation to problem statement **PS-04: CivicSense - Bilingual AI Smart Campus Issue Management System**.
+**Updated:** 2026-11-04
+**Scope:** Current repository implementation, including the AI workflows, complaint storage, authentication, and release-readiness changes. This report supersedes the earlier code snapshot below.
 
-While the base stack (Next.js, Tailwind/custom CSS, Neon PostgreSQL via Prisma, and JWT authentication) is functional, the AI triage, duplicate detection, bilingual translation, and categorization layers are currently simulated with basic keyword heuristics.
+## Executive summary
 
----
+The original audit described multiple features as mocked or missing. That description no longer matches the code. CivicSense now includes campus-scoped complaint management, bilingual AI intake, browser voice dictation, AI triage and summaries, duplicate suggestions with opt-in clustering, report-grounded Campus Pulse Q&A, durable notifications, evidence review, admin tagging/filtering, request limits, paginated reads, and health checks.
 
-## 2. Gap Analysis: Requirements vs. Current Implementation
+Two correctness issues found during this review have been fixed: the local duplicate matcher no longer treats a shared location/category alone as strong evidence of a duplicate, and unavailable image verification is no longer reported as AI-verified. Resolution changes now require a short-lived signed token bound to the complaint and after-image; a token can represent AI verification or an explicitly confirmed manual review.
 
-| Requirement from PS-04 | Current Status | Current Codebase Implementation | Technical Requirement |
-| :--- | :--- | :--- | :--- |
-| **Bilingual Submission (Assamese & English)** | 🟡 Partial | Static dictionary (`copy` object in [`CivicSenseApp.tsx`](file:///d:/Projects/HKTN/Anazori-26/Anazori/src/components/CivicSenseApp.tsx)). Form accepts raw Assamese text but does not parse it. | Assamese tokenization, language identification, and cross-lingual translation. |
-| **Image-based Complaint Reporting** | 🟡 Surface only | Base64 file upload in [`CivicSenseApp.tsx`](file:///d:/Projects/HKTN/Anazori-26/Anazori/src/components/CivicSenseApp.tsx). Stored in DB and rendered in detail modal. | **Multimodal vision AI**: Analyze the image to verify evidence, extract scene details, and reject unrelated images/spam. |
-| **AI Classification & Prioritisation** | 🔴 Mocked | [`src/app/api/ai/analyse/route.ts`](file:///d:/Projects/HKTN/Anazori-26/Anazori/src/app/api/ai/analyse/route.ts) uses a 4-line `if/else` keyword check (`water`, `wifi`, `light`, `waste`). | Gen AI model returning structured JSON with category, department routing, priority level, and justification. |
-| **Bilingual Summaries** | 🔴 Mocked | Fixed template strings in [`route.ts`](file:///d:/Projects/HKTN/Anazori-26/Anazori/src/app/api/ai/analyse/route.ts). Emits the same generic Assamese sentence regardless of input text. | Real context-aware bilingual summarization (`summaryEn` and `summaryAs`) preserving grievance details. |
-| **Duplicate Detection** | 🔴 Mocked / Inaccurate | Naive substring match in [`CivicSenseApp.tsx`](file:///d:/Projects/HKTN/Anazori-26/Anazori/src/components/CivicSenseApp.tsx). Flags issues with identical location names as duplicates. | Semantic cross-lingual duplicate detection and upvote clustering. |
-| **Categorization & Tagging** | 🔴 Inflexible | Single hardcoded category from 5 choices. No multi-tagging or tag-based filtering. | Multi-dimensional tagging system for filtering across departments, locations, and issue types. |
-| **Resolution Verification** | 🔴 Missing | Admins can change status to "Resolved" with a single click; no proof required. | "Before & After" photo verification to prevent unverified closures. |
-| **Status Tracking & Notifications** | 🟡 Partial | Status is saved in Neon DB. Notifications exist only in temporary React state and vanish on page refresh. | Prisma `Notification` table to persist status alerts and resolution updates. |
-| **Admin Control Room & Statistics** | 🟢 Complete | [`AdminControlRoom.tsx`](file:///d:/Projects/HKTN/Anazori-26/Anazori/src/components/AdminControlRoom.tsx) provides filtering, bulk updates, and CSV export. | Feed AI tags, duplicate counts, and resolution proof into the admin dashboard. |
+**No implementation can guarantee a hackathon placement.** AI quality, judging criteria, presentation, and live deployment remain outside the codebase’s control.
 
----
+## Requirements and current status
 
-## 3. Current Codebase Limitations
+| Area | Status | Current implementation and remaining caveat |
+|---|---|---|
+| English/Assamese intake | Implemented with provider-dependent quality | Language is detected from script; Gemini handles mixed-language analysis when configured. Without Gemini, local rules and translation fallbacks have lower accuracy. |
+| Image-based reports | Implemented | JPEG/PNG/WebP evidence is validated and stored inline in PostgreSQL (maximum 3 MB). Gemini can assess an attached photo during triage. Images are returned only when an authenticated, same-campus user opens a report. Inline storage increases database size and request payloads. |
+| AI categorization, routing, priority | Implemented with fallback | Gemini returns structured fields; bounded local rules are used if the provider is unavailable or unconfigured. Model responses are normalized and capped, but predictions still require human review. |
+| Bilingual summaries | Implemented with fallback | Gemini produces contextual summaries when enabled. The fallback uses the configured translation provider; translation quality and availability are external dependencies. |
+| Voice reporting | Implemented with browser-dependent support | The report form uses browser SpeechRecognition/Web Speech where available for English or Assamese dictation. The student can edit the transcript before analysis and submission. No raw audio is uploaded by this feature; browser support, microphone permission, and Assamese transcription quality vary. |
+| Campus Pulse | Implemented with bounded evidence | Authenticated Q&A is scoped to the user's campus and samples at most 120 recent reports. Gemini answers cite only supplied report IDs, which the API validates; local summaries are used when Gemini is unavailable. This is not exhaustive historical analytics. |
+| Duplicate detection | Implemented as a human-confirmed suggestion | Local token similarity requires report-text overlap; campus/location/category alone no longer qualifies. Gemini can suggest cross-language matches. It checks at most 80 recent active master reports and asks the student to confirm before clustering, so it is not exhaustive and does not auto-merge. |
+| Tags and categorization | Implemented | Triage supplies subsystem, severity, and location tags; administrators can filter reports by multiple tags. Tag quality depends on model output or the local rule set. |
+| Resolution evidence | Implemented with explicit fallback | Admins must submit an after photo. Gemini compares before/after images where available. If automated comparison is unavailable, the UI requires explicit administrator confirmation of manual review; an AI rejection cannot be overridden through this workflow. The API requires a short-lived signed token bound to the complaint and exact evidence image. |
+| Status notifications | Implemented | Notifications are persisted in PostgreSQL; status and response updates are written with the related complaint transaction. |
+| Admin dashboard | Implemented | Campus-scoped queues include filters, bulk actions, tags, metrics, and CSV export. |
+| Admin account provisioning | Hardened | Production administrator signup requires `ADMIN_SIGNUP_CODE`; set a private invitation code in the deployment environment. Existing admin accounts are unaffected. |
+| Load/readiness | Load test failed; not load-certified | Complaint listing is cursor-paginated (50 by default, 100 maximum); rate limits and shared AI cache use Upstash Redis; `/api/health` checks the database and Redis. A local 100-request burst exhausted the Prisma connection pool; staging performance remains untested. |
 
-### 3.1. Keyword-based AI Triage (`src/app/api/ai/analyse/route.ts`)
-```typescript
-let category = "Other campus issue";
-let department = "Campus Administration";
-let priority = "Medium";
-if (text.includes("water") || text.includes("পানী")) { category = "Water supply"; department = "Maintenance"; priority = "High"; }
-else if (text.includes("wifi") || text.includes("internet") || text.includes("ৱাই")) { category = "Internet / Wi-Fi"; department = "IT Services"; }
-else if (text.includes("light") || text.includes("security") || text.includes("আলো")) { category = "Safety & security"; department = "Estate & Security"; priority = "High"; }
-else if (text.includes("waste") || text.includes("clean") || text.includes("আৱৰ্জনা")) { category = "Cleanliness"; department = "Sanitation"; priority = "Low"; }
+## Changes completed in this review
 
-summaryEn: `${title}. Reported at ${location}. Our ${department.toLowerCase()} team will review this issue.`;
-summaryAs: `এই সমস্যাটো ${location} স্থানত প্ৰতিবেদন কৰা হৈছে। ${department} দলে ইয়াক পৰ্যালোচনা কৰিব।`;
-```
-- **Fails on unlisted issues**: Lab equipment problems, broken furniture, ceiling leaks, or transport complaints default to "Other campus issue".
-- **Fails on linguistic variation**: Alternate Assamese phrasing, misspellings, or phonetic typing are ignored.
-- **Static summaries**: The Assamese summary does not convey what the student actually reported.
+- Replaced the local duplicate score that over-weighted shared category/location with a report-text similarity score and supporting category/location/tag signals.
+- Added AI photo-assessment output to complaint triage and surfaced it during intake.
+- Preserved Gemini’s bilingual summaries instead of overwriting them with a second translation pass.
+- Made manual resolution review visibly distinct from successful AI verification.
+- Bound resolution-verification tokens to the complaint ID and the after-image digest; tokens expire after five minutes. The complaint update endpoint rejects resolution without a valid token.
+- Required an administrator invitation code for production administrator signup, with constant-time code comparison.
+- Added Campus Pulse with campus-scoped report evidence, validated report-ID citations, bounded recent-report metrics, rate limits, and local fallback.
+- Added browser-based English/Assamese voice dictation to the report description, preserving transcript editing and explicit review/submission.
+- Updated the README and this report to describe the actual Blob-free, inline-evidence implementation and its trade-offs.
 
-### 3.2. Substring Duplicate Matcher (`src/components/CivicSenseApp.tsx`)
-```typescript
-const combined = `${title} ${description}`.toLowerCase();
-const existing = complaints.find(
-  (item) => combined.includes(item.category.toLowerCase().split(" ")[0]) || 
-            item.location.toLowerCase() === location.toLowerCase()
-);
-```
-- **High false positive rate**: Two distinct complaints at "Hostel block C" (e.g. broken window vs. power failure) trigger a false duplicate alert.
-- **Cross-lingual failure**: An English report (*"No running water"*) and an Assamese report (*"পানীৰ যোগান নাই"*) will never match due to zero string overlap.
+## Operational requirements before judging or release
 
----
+1. Configure a unique `AUTH_SECRET` (at least 32 characters) and a private `ADMIN_SIGNUP_CODE` in every production deployment environment.
+2. Configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`; without them, rate limits and caches fall back to per-instance memory and do not coordinate across instances.
+3. Configure `GEMINI_API_KEY` to demonstrate the full AI-powered flows. Without it, the app continues with local fallbacks; do not describe those fallbacks as generative AI.
+4. Apply the additive database setup/index changes to the deployment database using the documented setup command.
+5. After addressing the connection-pool bottleneck, rerun the authenticated read-only load test against staging and review failure rate and p95 latency. The local test used one authenticated session for 100 concurrent requests; it is not a simulation of 100 distinct users.
+6. Translation sends report text to the configured translation endpoint (external by default). Review the provider’s privacy/retention terms or configure a trusted provider before handling sensitive reports.
+7. Existing public Blob URLs can still render in old reports, but new evidence is stored in PostgreSQL. Remove the old Blob store only after confirming that no remaining reports depend on it.
 
-## 4. Systematic Issue Tagging & Categorization System
+## Verification performed
 
-### 4.1. The Need for Dynamic Tags
-A single category (e.g., "Maintenance") is too broad for campus administration. An issue like *"Water leakage in Chemistry Lab 2 damaging electrical wiring"* touches multiple operational concerns:
-- Location / Facility: `Lab`, `Chemistry Department`
-- Infrastructure Type: `Plumbing`, `Electrical`
-- Risk Factor: `Safety Hazard`, `Equipment Damage`
+- `npm run build` — passed, including Prisma generation, Next.js compilation, and TypeScript validation.
+- `git diff --check` — passed.
+- `node --check scripts/load-test.mjs` — passed.
+- `npm audit --omit=dev` — **not clean:** 6 production dependency advisories (1 moderate, 5 high), involving Prisma’s toolchain and Next.js/PostCSS dependency ranges. Remediation requires compatibility review; no breaking `--force` upgrade was applied.
+- 15/15 read-only/API checks passed for health, student/admin sign-in and identity, paginated complaints, notifications, campuses, role authorization, AI triage, follow-up, duplicate suggestions, response copilot, and invalid evidence rejection.
+- The duplicate endpoint returned a matching suggestion for a known matching report. A real Gemini image comparison correctly rejected an unrelated after-photo; an attempted resolution without a valid verification token was rejected with HTTP 409. No complaint, response, or notification was changed during testing.
+- Student dashboard, complaint list, student services, admin queue/detail, evidence display, settings, and local image preview were checked in the browser without visible errors. Photo removal initially failed because the preview image intercepted clicks; the image now ignores pointer events, and removal was verified after the fix.
+- A 100-request read-only burst against the local app completed with 23 HTTP 200 responses, 20 HTTP 500 responses, and 57 client timeouts/non-HTTP results (77% non-2xx; p95 30,097 ms). Server logs showed Prisma `P2024` connection-pool timeouts at a pool limit of 17. The subsequent health check returned healthy; no complaint or notification data was modified.
+- After Campus Pulse and voice reporting were added, `npm run build`, `npx tsc --noEmit`, and `git diff --check` passed. A read-only Campus Pulse query returned a campus-scoped answer with report references; no records were changed. The report form and voice-input control rendered in the browser.
 
-### 4.2. Multi-Dimensional Tag Taxonomy
-During AI triage, the model generates 2 to 4 structured tags across standard dimensions:
-1. **Facility/Zone Tag**: `#HostelBlockC`, `#CentralLibrary`, `#AdminBlock`, `#ScienceLab`
-2. **Technical Subsystem Tag**: `#Plumbing`, `#Electrical`, `#Networking`, `#Sanitation`, `#CivilWork`
-3. **Severity/Urgency Tag**: `#Hazard`, `#Urgent`, `#Routine`, `#AssetDamage`
+## Remaining verification gaps and known limitations
 
-### 4.3. Admin Filtering Workflow
-- In [`AdminControlRoom.tsx`](file:///d:/Projects/HKTN/Anazori-26/Anazori/src/components/AdminControlRoom.tsx), a dedicated **Tag Bar** displays active tags with count badges (e.g. `[#HostelBlockC (8)]`, `[#Plumbing (5)]`, `[#Electrical (3)]`).
-- Admins can filter tickets by multiple tags to identify localized clusters or assign specific contractor teams (e.g., filtering `#Plumbing` + `#HostelBlockC` to export a single worklist for the campus plumber).
-- Students can click tags on their dashboard to view related open issues in their vicinity.
-
----
-
-## 5. Duplicate-to-Upvote Clustering ("+1 Affected Student")
-
-### 5.1. Concept & Problem Solved
-Traditional systems simply reject or block duplicate complaints, which frustrates users and leads to abandoned reports. 
-
-Instead of rejecting a duplicate:
-1. **Semantic Matching**: When a new grievance is submitted, the AI compares it against active complaints on that campus. If the semantic similarity exceeds a threshold (e.g., > 0.80), the system identifies the existing complaint as the **Master Ticket**.
-2. **Upvote / Endorsement Conversion**: The student's submission is converted into an **Upvote / "+1 Affected"** vote on the master ticket.
-3. **Dynamic Priority Escalation**: As the affected count increases, the priority automatically escalates:
-   - 1 report: Normal priority
-   - 5+ reports: Raised to High
-   - 15+ reports: Raised to Critical (broad campus impact)
-4. **Unified Broadcast Notification**: When the admin resolves the master ticket, **all students** who reported or upvoted the issue receive a resolution alert.
-
----
-
-## 6. "Before & After" Resolution Proof (Computer Vision Verification)
-
-### 6.1. Concept & Problem Solved
-A common failure in campus grievance systems is premature or false ticket closure: an administrator or contractor marks an issue as "Resolved" without work being performed.
-
-### 6.2. Workflow
-1. **Submission ("Before" Image)**: The student uploads a photo showing the initial defect (e.g., an overflowing garbage bin or leaking pipe).
-2. **Resolution Submission ("After" Image)**: When an admin or field staff marks the issue as "Resolved", the system requires an **"After" photo**.
-3. **Multimodal AI Comparison**: The vision model inspects both images:
-   - Verifies scene consistency (same location/angle).
-   - Confirms the problem shown in the "Before" photo has been remedied in the "After" photo.
-   - Generates an **AI Verification Log** (e.g., *"Verification Successful: Waste container cleared and surrounding area clean"*).
-4. **Resolution Badge**: The complaint detail modal displays the side-by-side comparison with a verified checkmark, providing transparency to students.
-
----
-
-## 7. End-to-End Gen AI Architecture
-
-```
-[Student / User]
-       │
-       ▼
- 1. Submit Grievance
-    - Title & Description (English / Assamese / Mixed)
-    - Location
-    - "Before" Photo (Evidence)
-       │
-       ▼
- 2. Next.js API Route (`/api/ai/analyse`)
-       │
-       ├───► 3. Multimodal Model (Gemini 1.5/2.0 Flash)
-       │        ├─ Language Detection (Assamese / English / Mixed)
-       │        ├─ Image Validation: Confirms photo matches description
-       │        ├─ Classification: Category, Department, Priority
-       │        ├─ Dynamic Tags: Multi-dimensional labels (#HostelC, #Plumbing)
-       │        ├─ Bilingual Summaries: Contextual summaryEn and summaryAs
-       │        └─ Spam/Toxicity Filter: Discards invalid reports
-       │
-       ├───► 4. Semantic Duplicate Engine
-       │        ├─ Compare against active campus issues
-       │        └─ Match found? -> Link to Master Ticket & increment Upvote count
-       │
-       ▼
- 5. Save to Neon PostgreSQL
-```
-
----
-
-## 8. Database Schema Enhancements (Prisma)
-
-Update [`prisma/schema.prisma`](file:///d:/Projects/HKTN/Anazori-26/Anazori/prisma/schema.prisma) with the following models:
-
-```prisma
-model Complaint {
-  id               String   @id @default(cuid())
-  publicId         String   @unique
-  userId           String
-  campusName       String
-  title            String
-  description      String
-  language         String   @default("en")
-  category         String
-  priority         String
-  department       String
-  status           String   @default("Submitted")
-  location         String
-  imageUrl         String?                    // "Before" photo
-  resolvedImageUrl String?                    // "After" photo (resolution proof)
-  resolutionNotes  String?                    // Admin/AI closure commentary
-  summaryEn        String
-  summaryAs        String
-  tags             String[] @default([])      // Multi-dimensional issue tags
-  upvotes          Int      @default(0)       // Affected student count
-  masterId         String?                    // References master complaint if duplicate
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  notifications    Notification[]
-}
-
-model Notification {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String
-  body        String
-  read        Boolean  @default(false)
-  complaintId String?
-  complaint   Complaint? @relation(fields: [complaintId], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-}
-```
-
----
-
-## 9. Next Implementation Steps
-
-1. **Add Gemini API Key**: Configure `GEMINI_API_KEY` in `Anazori/.env`.
-2. **Schema Migration**: Update `prisma/schema.prisma` with `tags`, `resolvedImageUrl`, `upvotes`, and run `npm run db:generate && prisma db push`.
-3. **Upgrade `/api/ai/analyse`**: Replace keyword `if/else` checks with real Gemini multimodal calls returning structured JSON.
-4. **Implement Admin Tag Bar & Before/After Modal**: Add tag filters and image verification upload to [`AdminControlRoom.tsx`](file:///d:/Projects/HKTN/Anazori-26/Anazori/src/components/AdminControlRoom.tsx).
+- Successful complaint submission, admin assignment/status changes, response publishing, successful resolution, and notification-read updates were not exercised because they would change existing data. The invalid-resolution guard was tested, but a complete successful write workflow still needs a disposable staging account.
+- The local 100-request burst failed due to Prisma connection-pool exhaustion. It used one authenticated session rather than 100 distinct users. Staging capacity and multi-user behavior are still unverified; investigate connection pooling/deployment limits before claiming support for 100 concurrent users.
+- The main overview still contains static demo metrics (for example resolution time and satisfaction) and should not be presented as live database-derived measurements. Campus Pulse metrics are live but cover at most the 120 newest reports.
+- Voice transcription itself was not validated end to end; a browser speech-recognition stop error was observed. Browser/device support, microphone permission, and Assamese transcription quality remain unverified and may vary.
+- Settings rendered successfully, but profile/preferences persistence was not tested. No claim is made here that those settings save across sessions.
+- AI API paths and a Gemini image comparison were exercised, but generated content quality was not exhaustively evaluated.

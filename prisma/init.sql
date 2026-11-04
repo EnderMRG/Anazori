@@ -68,6 +68,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "Complaint_publicId_key" ON "Complaint"("publi
 CREATE INDEX IF NOT EXISTS "Complaint_userId_createdAt_idx" ON "Complaint"("userId", "createdAt");
 CREATE INDEX IF NOT EXISTS "Complaint_status_idx" ON "Complaint"("status");
 CREATE INDEX IF NOT EXISTS "Complaint_campusName_idx" ON "Complaint"("campusName");
+CREATE INDEX IF NOT EXISTS "Complaint_campusName_createdAt_id_idx" ON "Complaint"("campusName", "createdAt", "id");
 CREATE INDEX IF NOT EXISTS "Complaint_masterId_idx" ON "Complaint"("masterId");
 
 CREATE TABLE IF NOT EXISTS "Notification" (
