@@ -139,12 +139,82 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
   const [error, setError] = useState("");
   const [voiceError, setVoiceError] = useState("");
   const [recordingVoice, setRecordingVoice] = useState(false);
+  const [voiceInput, setVoiceInput] = useState("");
+  const [extractingFields, setExtractingFields] = useState(false);
+  const [autoFilledSuccess, setAutoFilledSuccess] = useState(false);
+  const [extractedTags, setExtractedTags] = useState<string[]>([]);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [reviewWarning, setReviewWarning] = useState("");
   const [serviceFields, setServiceFields] = useState<Record<string, string>>({});
+  const [inputMode, setInputMode] = useState<string | null>(null);
+  const [normalizedAs, setNormalizedAs] = useState<string | null>(null);
+  const [normalizedEn, setNormalizedEn] = useState<string | null>(null);
+  const [wasNormalized, setWasNormalized] = useState(false);
   const serviceDetails = studentServiceOptions.find((item) => item.label === selectedService);
 
   useEffect(() => () => recognitionRef.current?.stop(), []);
+
+  async function handleExtractFromVoice(textToParse?: string) {
+    const raw = (textToParse ?? voiceInput).trim();
+    if (!raw) {
+      setVoiceError(language === "as" ? "অনুগ্ৰহ কৰি প্ৰথমে সমস্যাটো মুখেৰে কওক বা লিখক।" : "Please speak or enter your problem description in the box first.");
+      return;
+    }
+    setExtractingFields(true);
+    setVoiceError("");
+    setAutoFilledSuccess(false);
+
+    try {
+      const res = await fetch("/api/ai/parse-intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: raw, language }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to extract fields.");
+
+      if (data.title) setTitle(data.title);
+      if (data.location) setLocation(data.location);
+      if (data.description) setDescription(data.description);
+      if (Array.isArray(data.tags) && data.tags.length > 0) {
+        setExtractedTags(data.tags);
+      }
+      if (data.inputMode) setInputMode(String(data.inputMode));
+      if (data.normalizedAs) setNormalizedAs(String(data.normalizedAs));
+      if (data.normalizedEn) setNormalizedEn(String(data.normalizedEn));
+      setWasNormalized(Boolean(data.wasNormalized));
+      setAutoFilledSuccess(true);
+      clearReview();
+    } catch {
+      // Local client fallback in case network call fails
+      const sentences = raw.split(/[.?!।\n]+/);
+      let autoTitle = (sentences[0] || raw).trim();
+      if (autoTitle.length > 65) {
+        autoTitle = autoTitle.split(/\s+/).slice(0, 8).join(" ");
+      }
+      autoTitle = autoTitle.charAt(0).toUpperCase() + autoTitle.slice(1);
+      setTitle(autoTitle || "Reported campus issue");
+      setDescription(raw);
+
+      let loc = "";
+      const locMatch = raw.match(/(?:in|at|near|around)\s+([A-Za-z0-9\s-]{3,35}(?:hostel|block|hall|room|floor|lab|library|canteen|gate))/i);
+      if (locMatch?.[1]) loc = locMatch[1].trim();
+      else if (raw.toLowerCase().includes("hostel") || raw.includes("ছাত্ৰাবাস")) loc = "Hostel Campus";
+      else if (raw.toLowerCase().includes("library") || raw.includes("লাইব্ৰেৰী")) loc = "Central Library";
+      if (loc) setLocation(loc);
+
+      const hasHazard = ["fire", "smoke", "spark", "shock", "danger", "unsafe", "বিপদ", "জুই"].some((w) => raw.toLowerCase().includes(w));
+      const fallbackTags = [
+        loc ? (loc.includes("Hostel") ? "#Hostel" : loc.includes("Library") ? "#CentralLibrary" : "#CampusCare") : "#CampusCare",
+        hasHazard ? "#Hazard" : "#Urgent",
+      ];
+      setExtractedTags(fallbackTags);
+      setAutoFilledSuccess(true);
+      clearReview();
+    } finally {
+      setExtractingFields(false);
+    }
+  }
 
   function toggleVoiceInput() {
     if (recognitionRef.current) {
@@ -160,7 +230,7 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
     }
 
     const recognition = new Recognition();
-    const originalDescription = description.trim();
+    const originalInput = voiceInput.trim();
     let finalTranscript = "";
     recognition.lang = language === "as" ? "as-IN" : "en-IN";
     recognition.continuous = true;
@@ -169,7 +239,8 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
       const results = Array.from(event.results);
       finalTranscript = results.filter((result) => result.isFinal).map((result) => result[0].transcript.trim()).filter(Boolean).join(" ");
       const interimTranscript = results.filter((result) => !result.isFinal).map((result) => result[0].transcript.trim()).filter(Boolean).join(" ");
-      setDescription([originalDescription, finalTranscript, interimTranscript].filter(Boolean).join(" "));
+      setVoiceInput([originalInput, finalTranscript, interimTranscript].filter(Boolean).join(" "));
+      setAutoFilledSuccess(false);
       clearReview();
     };
     recognition.onerror = (event) => {
@@ -178,9 +249,13 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
         : "Voice recognition stopped unexpectedly. Your transcript can still be edited.");
     };
     recognition.onend = () => {
-      setDescription([originalDescription, finalTranscript].filter(Boolean).join(" "));
+      const finishedText = [originalInput, finalTranscript].filter(Boolean).join(" ");
+      setVoiceInput(finishedText);
       setRecordingVoice(false);
       recognitionRef.current = null;
+      if (finishedText.trim().length >= 8) {
+        void handleExtractFromVoice(finishedText);
+      }
     };
     recognitionRef.current = recognition;
     setVoiceError("");
@@ -202,6 +277,10 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
     setDuplicateOf("");
     setError("");
     setReviewWarning("");
+    setInputMode(null);
+    setNormalizedAs(null);
+    setNormalizedEn(null);
+    setWasNormalized(false);
   }
 
   async function analyze(event: FormEvent) {
@@ -248,7 +327,6 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
       const data = analyseResult.value;
       setAnalysis(data);
 
-      // Follow-up clarification is now embedded directly in the unified Gemini analysis payload!
       if (data.followUpNeeded && data.followUpQuestionEn) {
         setFollowUp({
           needed: true,
@@ -311,8 +389,8 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
         image,
         reporter: "",
         tags: serviceCategory
-          ? Array.from(new Set(["#StudentServices", ...(Array.isArray(analysis.tags) ? analysis.tags.filter((tag: unknown): tag is string => typeof tag === "string") : [])])).slice(0, 4)
-          : Array.isArray(analysis.tags) ? analysis.tags.filter((tag: unknown): tag is string => typeof tag === "string") : [],
+          ? Array.from(new Set(["#StudentServices", ...(extractedTags.length ? extractedTags : Array.isArray(analysis.tags) ? analysis.tags.filter((tag: unknown): tag is string => typeof tag === "string") : [])])).slice(0, 4)
+          : Array.from(new Set([...(extractedTags.length ? extractedTags : []), ...(Array.isArray(analysis.tags) ? analysis.tags.filter((tag: unknown): tag is string => typeof tag === "string") : [])])).slice(0, 4),
         upvotes: 1,
         campusName: campus.name,
         duplicateOf: duplicateOf || undefined,
@@ -331,23 +409,126 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
     <div className="form-modal">
       <div className="modal-top"><div><span className="modal-kicker"><Sparkles size={13} /> {serviceCategory ? "STUDENT SERVICES" : "BILINGUAL AI REPORTING"}</span><h2>{serviceCategory ? selectedService : "Report a campus issue"}</h2><p>{serviceCategory ? serviceDetails?.prompt : "AI will clarify incomplete reports and suggest possible matches for your review."}</p></div><button className="icon-button" onClick={onClose} aria-label="Close"><X size={20} /></button></div>
       <form onSubmit={analysis ? submit : analyze}>
-        <div className="form-language"><Languages size={16} /><span>Writing in <b>{language === "en" ? "English" : "অসমীয়া"}</b></span><span className="form-language-hint">English, Assamese, or both</span></div>
+        <div className="form-language"><Languages size={16} /><span>Writing in <b>{language === "en" ? "English" : "অসমীয়া"}</b></span><span className="form-language-hint">English, Assamese Unicode, or Romanized Assamese (Xongbado)</span></div>
+
+        {!serviceCategory && (
+          <div className="voice-intake-card">
+            <div className="voice-intake-header">
+              <div className="voice-intake-title">
+                <Mic size={16} className={recordingVoice ? "text-red" : ""} />
+                <span>{language === "as" ? "ভইচ বা খৰতকীয়া বিৱৰণ (স্মাৰ্ট পূৰণ)" : "Voice & Quick Intake (Smart Auto-Fill)"}</span>
+              </div>
+              <span className="voice-intake-badge">AI Powered</span>
+            </div>
+            <p className="voice-intake-sub">
+              {language === "as"
+                ? "আপোনাৰ সমস্যাটো মুখেৰে কওক বা লিখক। AI-য়ে তলৰ প্ৰপত্ৰখনত শীৰ্ষক, স্থান, বিৱৰণ আৰু জৰুৰী টেগসমূহ নিজে নিজে পূৰণ কৰিব।"
+                : "Speak or describe your problem freely. AI reads this and automatically fills the Title, Location, Description, and Urgency tags below."}
+            </p>
+            <textarea
+              value={voiceInput}
+              onChange={(event) => {
+                setVoiceInput(event.target.value);
+                setAutoFilledSuccess(false);
+              }}
+              placeholder={
+                recordingVoice
+                  ? language === "as" ? "শুনি থকা হৈছে... কওক..." : "Listening... Speak now..."
+                  : language === "as"
+                  ? "উদাহৰণ: ছাত্ৰাবাস চি-ৰ ২য় মহলাৰ শৌচালয়ত পাইপ ফাটি পানী ওলাই আছে... (অসমীয়া, ইংৰাজী বা Xongbado যিকোনো)"
+                  : "e.g. Water is leaking in Hostel Block C (English / অসমীয়া / Romanized Assamese all work — try 'CCSA building agote pani jomi ase')"
+              }
+              rows={3}
+              className={`voice-intake-textarea ${recordingVoice ? "recording-border" : ""}`}
+            />
+            <div className="voice-intake-controls">
+              <button
+                type="button"
+                className={`voice-record-btn ${recordingVoice ? "voice-record-btn-active" : ""}`}
+                onClick={toggleVoiceInput}
+                aria-pressed={recordingVoice}
+              >
+                {recordingVoice ? <MicOff size={15} /> : <Mic size={15} />}
+                {recordingVoice
+                  ? (language === "as" ? "ৰেকৰ্ডিং বন্ধ কৰক" : "Stop recording")
+                  : (language === "as" ? "মুখেৰে কওক" : "Describe by voice")}
+              </button>
+              <button
+                type="button"
+                className="voice-autofill-btn"
+                disabled={extractingFields || !voiceInput.trim()}
+                onClick={() => void handleExtractFromVoice()}
+              >
+                {extractingFields ? (
+                  <><Loader2 size={15} className="spin" /> {language === "as" ? "পূৰণ কৰি থকা হৈছে..." : "Extracting details..."}</>
+                ) : (
+                  <><Sparkles size={15} /> {language === "as" ? "প্ৰপত্ৰ স্বয়ংক্ৰিয়ভাৱে পূৰণ কৰক" : "Auto-fill form"}</>
+                )}
+              </button>
+              {voiceInput.trim() && (
+                <button
+                  type="button"
+                  className="voice-clear-btn"
+                  onClick={() => {
+                    setVoiceInput("");
+                    setAutoFilledSuccess(false);
+                  }}
+                >
+                  {language === "as" ? "মচি দিয়ক" : "Clear"}
+                </button>
+              )}
+            </div>
+            {voiceError && <div className="duplicate-alert"><AlertCircle size={15} /><span>{voiceError}</span></div>}
+            {autoFilledSuccess && (
+              <div className="voice-success-banner">
+                <CheckCircle2 size={15} />
+                <span>{language === "as" ? "প্ৰপত্ৰখন সফলতাৰে স্বয়ংক্ৰিয়ভাৱে পূৰণ কৰা হৈছে! তলৰ তথ্যসমূহ পৰীক্ষা কৰক।" : "Form auto-filled! Please review and tweak the details below."}</span>
+              </div>
+            )}
+            {/* 3-Way Input Normalization badge — shown when romanized or mixed input was detected and normalized */}
+            {wasNormalized && inputMode && inputMode !== "english" && (
+              <div className="normalization-banner">
+                <Languages size={15} />
+                <div className="normalization-banner-body">
+                  <b>
+                    {inputMode === "romanized_assamese"
+                      ? "Romanized Assamese (Xongbado) detected → Normalized"
+                      : inputMode === "mixed"
+                        ? "Mixed Assamese + English → Normalized"
+                        : "Assamese input → Normalized"}
+                  </b>
+                  <span>
+                    {inputMode === "romanized_assamese"
+                      ? "আপুনি ৰোমান আখৰত অসমীয়া লিখিছে। AI-য়ে ইয়াক বিশুদ্ধ অসমীয়া আৰু ইংৰাজীলৈ ৰূপান্তৰ কৰিলে।"
+                      : "Your input has been converted to formal Assamese Unicode and English."}
+                  </span>
+                  {normalizedAs && (
+                    <details className="normalization-details">
+                      <summary>অসমীয়া সংস্কৰণ চাওক (View Assamese version)</summary>
+                      <p className="normalization-text assamese-normalized">{normalizedAs}</p>
+                    </details>
+                  )}
+                  {normalizedEn && (
+                    <details className="normalization-details">
+                      <summary>English version used for analysis</summary>
+                      <p className="normalization-text">{normalizedEn}</p>
+                    </details>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {serviceCategory && <label className="field-label">Service type<select value={selectedService} onChange={(event) => { setSelectedService(event.target.value); setServiceFields({}); clearReview(); }}>{studentServiceOptions.map((item) => <option key={item.label}>{item.label}</option>)}</select></label>}
         {serviceCategory && serviceDetails?.fields.map((field) => <label className="field-label" key={field.key}>{field.label}<input value={serviceFields[field.key] || ""} onChange={(event) => { setServiceFields((current) => ({ ...current, [field.key]: event.target.value })); clearReview(); }} placeholder={field.placeholder} /></label>)}
         <label className="field-label">{serviceCategory ? serviceDetails?.requestLabel : "What is the issue?"}<input value={title} onChange={(event) => { setTitle(event.target.value); clearReview(); }} placeholder={serviceCategory ? serviceDetails?.requestPlaceholder : language === "en" ? "e.g. No water in hostel block C" : "উদাহৰণ: ছাত্ৰাবাসত পানী নাই"} /></label>
         <label className="field-label">{serviceCategory ? serviceDetails?.detailsLabel : "Describe the problem"}<textarea value={description} onChange={(event) => { setDescription(event.target.value); clearReview(); }} placeholder={serviceCategory ? "Include dates, references, or any relevant details..." : language === "en" ? "Add details that could help us resolve this faster..." : "সমস্যাটোৰ বিষয়ে অধিক বিৱৰণ দিয়ক..."} rows={4} /></label>
-        {!serviceCategory && <div className="voice-input-row">
-          <button type="button" className={`voice-input-button ${recordingVoice ? "voice-input-recording" : ""}`} onClick={toggleVoiceInput} aria-pressed={recordingVoice}>
-            {recordingVoice ? <MicOff size={16} /> : <Mic size={16} />}
-            {recordingVoice ? "Stop voice input" : "Describe by voice"}
-          </button>
-          <span>{recordingVoice ? `Listening in ${language === "as" ? "Assamese" : "English"} — review the transcript before continuing.` : "Browser speech recognition; transcript stays editable."}</span>
-        </div>}
-        {voiceError && <div className="duplicate-alert"><AlertCircle size={16} /><span>{voiceError}</span></div>}
         <div className="form-two-col">
           <label className="field-label">{serviceCategory ? serviceDetails?.contextLabel : "Where is it?"}<div className="input-with-icon"><MapPin size={16} /><input value={location} onChange={(event) => { setLocation(event.target.value); clearReview(); }} placeholder={serviceCategory ? serviceDetails?.contextPlaceholder : "e.g. Hostel block C"} /></div></label>
           <PhotoUpload image={image} onImage={handleImage} onError={setError} onUploading={setUploadingImage} label={serviceCategory ? "Add a supporting document or photo" : "Add a before photo"} />
         </div>
+
         {!serviceCategory && (
           <CampusMapPicker
             campus={campus}
@@ -367,6 +548,30 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
             }}
           />
         )}
+
+        {extractedTags.length > 0 && (
+          <div className="voice-tags-row">
+            <div className="voice-tags-header">
+              <Tag size={13} />
+              <span>{language === "as" ? "স্বয়ংক্ৰিয় টেগসমূহ (প্ৰাথমিকতা আৰু বিষয়):" : "Auto-detected issue & urgency tags:"}</span>
+            </div>
+            <div className="voice-tags-list">
+              {extractedTags.map((tag) => (
+                <span key={tag} className="voice-tag-chip">
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => setExtractedTags((prev) => prev.filter((t) => t !== tag))}
+                    aria-label={`Remove ${tag}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {analysis && (
           <div className="ai-result">
             <div className="ai-result-head">
@@ -377,11 +582,48 @@ export function ComplaintFormWorkflow({ language, campus, serviceCategory, onClo
               <span><Tag size={13} />{serviceCategory ? selectedService : String(analysis.category)}</span>
               <span><Building2 size={13} />{serviceCategory ? serviceDetails?.department : String(analysis.department)}</span>
               <span><AlertCircle size={13} />{String(analysis.priority)} priority</span>
+              <span>
+                <Languages size={13} />
+                {analysis.language === "romanized_as" || inputMode === "romanized_assamese"
+                  ? "Romanized Assamese (Xongbado)"
+                  : analysis.language === "as" || inputMode === "assamese_unicode"
+                    ? "Assamese Unicode"
+                    : analysis.language === "mixed" || inputMode === "mixed"
+                      ? "Mixed language"
+                      : "English"}
+              </span>
               {typeof analysis.confidence === "number" && (
                 <span><Check size={13} />{Math.round(analysis.confidence * 100)}% confidence</span>
               )}
               {Array.isArray(analysis.tags) && (analysis.tags as unknown[]).filter((t): t is string => typeof t === "string").map((tag) => <span key={tag}>{tag}</span>)}
             </div>
+
+            {(wasNormalized || analysis.language === "romanized_as" || Boolean(analysis.normalizedAs || normalizedAs)) && (
+              <div className="normalization-ai-card">
+                <div className="normalization-ai-head">
+                  <div className="normalization-badge-title">
+                    <Languages size={14} />
+                    <span>3-Way Input Normalization (অসমীয়া · Xongbado · English)</span>
+                  </div>
+                  <span className="normalization-pill">
+                    {analysis.language === "romanized_as" || inputMode === "romanized_assamese"
+                      ? "Xongbado / Axomiya Normalized"
+                      : "Language Normalized"}
+                  </span>
+                </div>
+                <div className="normalization-grid">
+                  <div className="normalization-col">
+                    <label>বিশুদ্ধ অসমীয়া লিপ্যন্তৰ (Pure Assamese Unicode)</label>
+                    <p className="assamese-text">{String(analysis.normalizedAs || normalizedAs || analysis.summaryAs)}</p>
+                  </div>
+                  <div className="normalization-col">
+                    <label>Formal English Normalization</label>
+                    <p>{String(analysis.normalizedEn || normalizedEn || analysis.summaryEn)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {(Boolean(analysis.summaryEn) || Boolean(analysis.summaryAs)) && (
               <div className="ai-summary">
                 {Boolean(analysis.summaryEn) && (
@@ -553,7 +795,7 @@ export function ComplaintDetailWorkflow({ complaint, language, onClose, onUpdate
         language={language}
       />
     )}
-    <div className="ai-result"><div className="ai-result-head"><div className="ai-badge"><Sparkles size={15} /> AI analysis</div><span>{complaint.upvotes || 1} affected student{(complaint.upvotes || 1) === 1 ? "" : "s"}</span></div><div className="ai-summary"><div><b>English summary</b><p>{complaint.summaryEn}</p></div><div><b>অসমীয়া সাৰাংশ</b><p>{complaint.summaryAs}</p></div></div><div className="ai-tags"><span><Tag size={13} />{complaint.category}</span><span><Building2 size={13} />{complaint.department}</span><span><Languages size={13} />{complaint.language === "as" ? "Assamese" : complaint.language === "mixed" ? "Mixed language" : "English"}</span>{tags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>
+    <div className="ai-result"><div className="ai-result-head"><div className="ai-badge"><Sparkles size={15} /> AI analysis</div><span>{complaint.upvotes || 1} affected student{(complaint.upvotes || 1) === 1 ? "" : "s"}</span></div><div className="ai-summary"><div><b>English summary</b><p>{complaint.summaryEn}</p></div><div><b>অসমীয়া সাৰাংশ</b><p>{complaint.summaryAs}</p></div></div><div className="ai-tags"><span><Tag size={13} />{complaint.category}</span><span><Building2 size={13} />{complaint.department}</span><span><Languages size={13} />{complaint.language === "as" ? "Assamese" : complaint.language === "mixed" ? "Mixed language" : complaint.language === "romanized_as" ? "Romanized Assamese" : "English"}</span>{tags.map((tag) => <span key={tag}>{tag}</span>)}</div></div>
     <div className="detail-section"><h3>Original report</h3><p className="original-report">{complaint.description}</p>{beforeImage && <img className="report-image" src={beforeImage} alt="Before evidence" />}{evidenceError && <div className="duplicate-alert"><AlertCircle size={18} /><span>{evidenceError}</span></div>}<div className="reporter-line"><div className="mini-avatar">{complaint.reporter.split(" ").map((word) => word[0]).join("")}</div><span>Reported by <b>{complaint.reporter}</b></span></div></div>
     {role === "admin" && <section className="detail-section copilot-panel"><div className="copilot-panel-heading"><Sparkles size={17} /><div><h3>Response copilot</h3><p>Draft a factual bilingual update for review before publishing.</p></div></div><button className="secondary-button copilot-generate" disabled={copiloting} onClick={draftResponse}>{copiloting ? <><Loader2 size={15} className="spin" /> Drafting...</> : <><Sparkles size={15} /> Generate response draft</>}</button>{copilotProvider && <span className="copilot-provider">Draft generated with {copilotProvider}; review before publishing.</span>}{suggestedDepartment && <div className="copilot-next-steps"><b>Suggested department: {suggestedDepartment}</b>{suggestedDepartment !== complaint.department && <button className="text-button" onClick={assignSuggestedDepartment}>Assign to this department</button>}</div>}{nextSteps && <div className="copilot-next-steps"><b>Suggested next steps</b><p>{nextSteps}</p></div>}<label className="field-label">Public response · English<textarea value={responseEn} onChange={(event) => setResponseEn(event.target.value)} rows={3} maxLength={1000} placeholder="Draft an update for the reporter..." /></label><label className="field-label">Public response · অসমীয়া<textarea value={responseAs} onChange={(event) => setResponseAs(event.target.value)} rows={3} maxLength={1000} placeholder="প্ৰতিবেদন দিওঁতালৈ অসমীয়াত উত্তৰ..." /></label><div className="resolution-actions"><button className="primary-button" disabled={savingResponse || !responseEn.trim() || !responseAs.trim()} onClick={saveResponse}>{savingResponse ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Publish bilingual response</button></div>{error && <div className="duplicate-alert"><AlertCircle size={18} /><span>{error}</span></div>}</section>}
     {role === "student" && (complaint.adminResponseEn || complaint.adminResponseAs) && <section className="public-response-card"><div className="copilot-panel-heading"><MessageSquareText size={17} /><b>Campus response</b></div><p>{language === "as" ? complaint.adminResponseAs || complaint.adminResponseEn : complaint.adminResponseEn || complaint.adminResponseAs}</p></section>}

@@ -57,7 +57,7 @@ import { ComplaintDetailWorkflow, ComplaintFormWorkflow } from "@/components/Com
 import PwaInstallButton from "@/components/PwaInstallButton";
 import { NotificationSkeleton, Skeleton, WorkspaceSkeleton } from "@/components/SkeletonLoaders";
 
-export type Language = "en" | "as" | "mixed";
+export type Language = "en" | "as" | "mixed" | "romanized_as";
 type View = "overview" | "complaints" | "services" | "analytics" | "notifications" | "settings" | "admin";
 export type Status = "Submitted" | "In progress" | "Resolved";
 export type Priority = "Critical" | "High" | "Medium" | "Low";
@@ -311,7 +311,7 @@ export default function CivicSenseApp() {
     { id: 2, title: "Welcome to CivicSense", body: "You can report campus issues in Assamese or English.", time: "2 hours ago", unread: true },
     { id: 3, title: "Issue resolved", body: "CS-2045 was marked as resolved by Sanitation.", time: "Yesterday", unread: false },
   ]);
-  const t = copy[language === "mixed" ? "en" : language];
+  const t = copy[language === "mixed" || language === "romanized_as" ? "en" : language];
   const displayName = currentUser?.name || "Arjun";
   const activeCampus = selectedCampus || getCampus(currentUser?.campusName);
   const isAdmin = currentUser?.role === "admin";
