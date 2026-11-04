@@ -1904,3 +1904,264 @@ img, svg { max-width: 100%; }
 .gps-pill svg {
   color: #2b8f85;
 }
+
+/* Settings Account Panel & Mobile Logout */
+.settings-account-panel {
+  grid-column: 1 / -1;
+  border: 1px solid #fed7d7;
+  background: #fff8f8;
+}
+
+.settings-account-panel h2 {
+  color: #991b1b;
+}
+
+.settings-logout-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.settings-logout-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #991b1b;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.settings-logout-icon {
+  color: #dc2626;
+  flex-shrink: 0;
+}
+
+.settings-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #dc2626;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  min-height: 44px;
+}
+
+.settings-logout-btn:hover {
+  background: #b91c1c;
+}
+
+.settings-logout-btn:active {
+  transform: scale(0.98);
+}
+
+/* Enhanced Mobile Touch & Accessibility (without changing layout) */
+@media (max-width: 760px) {
+  .app-frame {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+  .content-wrap {
+    overflow: visible;
+    padding: 18px 14px calc(94px + env(safe-area-inset-bottom)) 14px;
+  }
+  .topbar {
+    min-height: 58px;
+    padding: 10px 14px;
+  }
+  .breadcrumb b {
+    font-size: 14px;
+  }
+  .language-toggle {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  .hero-row, .page-heading-row {
+    margin-bottom: 20px;
+  }
+  .hero-row h1, .page-heading-row h1 {
+    font-size: 21px;
+    line-height: 1.25;
+  }
+  .hero-row p, .page-heading-row p {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .metric-card {
+    padding: 12px 14px;
+    min-height: 108px;
+    border-radius: 12px;
+  }
+  .metric-value {
+    font-size: 23px;
+    font-weight: 800;
+  }
+  .metric-top {
+    font-size: 11px;
+  }
+  .metric-note {
+    font-size: 10px;
+  }
+  .primary-button, .secondary-button {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 9px;
+  }
+  .icon-button {
+    min-width: 38px;
+    min-height: 38px;
+  }
+  .field-label {
+    font-size: 11px;
+    margin-bottom: 12px;
+  }
+  .field-label input,
+  .field-label select,
+  .field-label textarea {
+    font-size: 15px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    min-height: 44px;
+  }
+  .input-with-icon input {
+    padding-left: 36px;
+  }
+  .search-box input {
+    min-height: 42px;
+    font-size: 14px;
+    padding-left: 36px;
+  }
+  .complaint-row {
+    padding: 13px 12px;
+  }
+  .complaint-title-line b {
+    font-size: 13px;
+  }
+  .complaint-meta {
+    font-size: 11px;
+  }
+  .status-pill {
+    font-size: 10px;
+  }
+  .priority {
+    font-size: 10px;
+  }
+  .student-service-card {
+    min-height: auto;
+    padding: 14px;
+    border-radius: 12px;
+  }
+  .student-service-card b {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  .student-service-card p {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  .settings-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .settings-panel {
+    padding: 16px;
+    border-radius: 12px;
+  }
+  .settings-logout-box {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .settings-logout-btn {
+    width: 100%;
+  }
+  .detail-modal, .form-modal {
+    padding: 18px 15px calc(36px + env(safe-area-inset-bottom)) 15px;
+  }
+  .modal-top h2 {
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .voice-input-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    margin: 10px 0 14px;
+  }
+  .voice-input-button {
+    min-height: 42px;
+    justify-content: center;
+  }
+  .mobile-bottom-nav {
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    padding: 6px 4px;
+    border-radius: 17px;
+    gap: 2px;
+  }
+  .mobile-bottom-nav button {
+    min-height: 50px;
+    padding: 4px 1px;
+    gap: 3px;
+    border-radius: 11px;
+  }
+  .mobile-bottom-nav button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .mobile-bottom-nav button span {
+    font-size: 8.5px;
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 480px) {
+  .student-service-grid {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+  .updates-feed-grid {
+    grid-template-columns: 1fr;
+  }
+  .campus-grid, .admin-metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 360px) {
+  .mobile-bottom-nav {
+    left: 4px;
+    right: 4px;
+    padding: 4px 2px;
+    border-radius: 14px;
+  }
+  .mobile-bottom-nav button {
+    min-height: 46px;
+  }
+  .mobile-bottom-nav button svg {
+    width: 16px;
+    height: 16px;
+  }
+  .mobile-bottom-nav button span {
+    font-size: 7.5px;
+  }
+}

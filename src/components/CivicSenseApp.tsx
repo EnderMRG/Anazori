@@ -669,7 +669,19 @@ export default function CivicSenseApp() {
             />
           )}
           {view === "notifications" && <Notifications notifications={notifications} loading={notificationsLoading} onRead={markNotificationsRead} />}
-          {view === "settings" && <SettingsView language={language} setLanguage={setLanguage} role={role} setRole={setRole} onSave={() => notify("Preferences saved successfully.")} />}
+          {view === "settings" && (
+            <SettingsView
+              language={language}
+              setLanguage={setLanguage}
+              role={role}
+              setRole={setRole}
+              onSave={() => notify("Preferences saved successfully.")}
+              currentUser={currentUser}
+              displayName={displayName}
+              onSignOut={signOut}
+              logOutLabel={t.logOut}
+            />
+          )}
           {hasMoreComplaints && view === "complaints" && <div className="load-more-reports"><button className="secondary-button" disabled={loadingMoreComplaints} onClick={() => void loadMoreComplaints()}>{loadingMoreComplaints ? <><Loader2 size={16} className="spin" /> Loading reports...</> : "Load older reports"}</button></div>}
         </div>
       </main>
@@ -1834,8 +1846,114 @@ function Notifications({ notifications, loading, onRead }: { notifications: Noti
   return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><Bell size={14} /> UPDATES</div><h1>Notifications</h1><p>Stay updated on your reports and campus activity.</p></div><button className="secondary-button" onClick={onRead}><Check size={16} /> Mark all as read</button></section>{loading ? <NotificationSkeleton /> : <div className="notification-list">{notifications.map((notification) => <div className={`notification-card ${notification.unread ? "notification-unread" : ""}`} key={notification.id}><div className="notification-icon"><Bell size={18} /></div><div><b>{notification.title}</b><p>{notification.body}</p><span>{notification.time}</span></div>{notification.unread && <span className="unread-dot" />}</div>)}</div>}</div>;
 }
 
- function SettingsView({ language, setLanguage, role, setRole, onSave }: { language: Language; setLanguage: (language: Language) => void; role: "student" | "admin"; setRole: (role: "student" | "admin") => void; onSave: () => void }) {
-  return <div className="page-enter"><section className="page-heading-row"><div><div className="eyebrow"><Settings size={14} /> PREFERENCES</div><h1>Settings</h1><p>Personalise your CivicSense experience.</p></div><button className="primary-button" onClick={onSave}><Check size={17} />Save changes</button></section><div className="settings-grid"><div className="panel settings-panel"><h2>Profile</h2><p className="panel-subtitle">Your account details</p><div className="profile-editor"><div className="large-avatar avatar-purple">AR</div><button className="text-button">Change photo</button></div><label className="field-label">Full name<input defaultValue="Arjun" /></label><label className="field-label">Email address<input defaultValue="arjun@dibru.ac.in" /></label><label className="field-label">Role<select value={role} onChange={(event) => setRole(event.target.value as "student" | "admin")}><option value="student">Student</option><option value="admin">Administrator (demo)</option></select></label></div><div className="panel settings-panel"><div className="settings-panel-heading"><div><h2>Language & notifications</h2><p className="panel-subtitle">Choose how CivicSense communicates with you</p></div><PwaInstallButton className="secondary-button" label="Install app" /></div><label className="field-label">Preferred language<div className="language-select"><button className={language === "en" ? "selected-lang" : ""} onClick={() => setLanguage("en")}>English</button><button className={language === "as" ? "selected-lang" : ""} onClick={() => setLanguage("as")}>অসমীয়া</button></div></label><ToggleRow label="Status updates" description="Get notified when your complaint changes status" /><ToggleRow label="Similar issue alerts" description="Know when a related issue has already been reported" /><ToggleRow label="Campus digest" description="A weekly summary of improvements around campus" /></div></div></div>;
+function SettingsView({
+  language,
+  setLanguage,
+  role,
+  setRole,
+  onSave,
+  currentUser,
+  displayName,
+  onSignOut,
+  logOutLabel,
+}: {
+  language: Language;
+  setLanguage: (language: Language) => void;
+  role: "student" | "admin";
+  setRole: (role: "student" | "admin") => void;
+  onSave: () => void;
+  currentUser?: AuthUser | null;
+  displayName: string;
+  onSignOut: () => void | Promise<void>;
+  logOutLabel?: string;
+}) {
+  const isAssamese = language === "as";
+  const userInitials = displayName ? displayName.slice(0, 2).toUpperCase() : "CS";
+
+  return (
+    <div className="page-enter">
+      <section className="page-heading-row">
+        <div>
+          <div className="eyebrow"><Settings size={14} /> {isAssamese ? "প্ৰাধান্যসমূহ" : "PREFERENCES"}</div>
+          <h1>{isAssamese ? "ছেটিংছ" : "Settings"}</h1>
+          <p>{isAssamese ? "আপোনাৰ CivicSense অভিজ্ঞতা পছন্দ অনুসৰি সাজক।" : "Personalise your CivicSense experience."}</p>
+        </div>
+        <button className="primary-button" onClick={onSave}>
+          <Check size={17} />{isAssamese ? "পৰিৱৰ্তন সংৰক্ষণ কৰক" : "Save changes"}
+        </button>
+      </section>
+
+      <div className="settings-grid">
+        <div className="panel settings-panel">
+          <h2>{isAssamese ? "প্ৰফাইল" : "Profile"}</h2>
+          <p className="panel-subtitle">{isAssamese ? "আপোনাৰ একাউণ্টৰ বিৱৰণ" : "Your account details"}</p>
+          <div className="profile-editor">
+            <div className="large-avatar avatar-purple">{userInitials}</div>
+            <button className="text-button" type="button">{isAssamese ? "ফটো সলনি কৰক" : "Change photo"}</button>
+          </div>
+          <label className="field-label">
+            {isAssamese ? "সম্পূৰ্ণ নাম" : "Full name"}
+            <input defaultValue={displayName} />
+          </label>
+          <label className="field-label">
+            {isAssamese ? "ইমেইল ঠিকনা" : "Email address"}
+            <input defaultValue={currentUser?.email || "student@campus.edu"} readOnly />
+          </label>
+          <label className="field-label">
+            {isAssamese ? "ভূমিকা" : "Role"}
+            <select value={role} onChange={(event) => setRole(event.target.value as "student" | "admin")}>
+              <option value="student">{isAssamese ? "শিক্ষাৰ্থী (Student)" : "Student"}</option>
+              <option value="admin">{isAssamese ? "কেম্পাছ প্ৰশাসক (Administrator)" : "Administrator (demo)"}</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="panel settings-panel">
+          <div className="settings-panel-heading">
+            <div>
+              <h2>{isAssamese ? "ভাষা আৰু জাননী" : "Language & notifications"}</h2>
+              <p className="panel-subtitle">{isAssamese ? "CivicSense এ আপোনাৰ সৈতে কেনেদৰে যোগাযোগ কৰিব বাছক" : "Choose how CivicSense communicates with you"}</p>
+            </div>
+            <PwaInstallButton className="secondary-button" label={isAssamese ? "এপ্প ইনষ্টল কৰক" : "Install app"} />
+          </div>
+          <label className="field-label">
+            {isAssamese ? "পছন্দৰ ভাষা" : "Preferred language"}
+            <div className="language-select">
+              <button type="button" className={language === "en" ? "selected-lang" : ""} onClick={() => setLanguage("en")}>English</button>
+              <button type="button" className={language === "as" ? "selected-lang" : ""} onClick={() => setLanguage("as")}>অসমীয়া</button>
+            </div>
+          </label>
+          <ToggleRow label={isAssamese ? "স্থিতিৰ আপডেট" : "Status updates"} description={isAssamese ? "অভিযোগৰ স্থিতি সলনি হ'লে জাননী পাওক" : "Get notified when your complaint changes status"} />
+          <ToggleRow label={isAssamese ? "সদৃশ সমস্যাৰ সতৰ্কবাৰ্তা" : "Similar issue alerts"} description={isAssamese ? "একেধৰণৰ সমস্যা ইতিমধ্যে প্ৰতিবেদন কৰা হ'লে জানক" : "Know when a related issue has already been reported"} />
+          <ToggleRow label={isAssamese ? "কেম্পাছ ডাইজেষ্ট" : "Campus digest"} description={isAssamese ? "কেম্পাছৰ উন্নতিৰ সাপ্তাহিক সাৰাংশ" : "A weekly summary of improvements around campus"} />
+        </div>
+
+        {/* Account Session & Logout Card - highly visible and easy to tap on mobile screens */}
+        <div className="panel settings-panel settings-account-panel">
+          <div className="settings-account-header">
+            <div>
+              <h2>{isAssamese ? "একাউণ্ট আৰু প্ৰস্থান" : "Account & Session"}</h2>
+              <p className="panel-subtitle">
+                {currentUser?.email
+                  ? `${isAssamese ? "ছাইন ইন কৰা আছে: " : "Signed in as "} ${currentUser.email}`
+                  : (isAssamese ? "বৰ্তমান সেশনৰ পৰা ওলাই যাওক" : "Sign out of your active session on this device")}
+              </p>
+            </div>
+          </div>
+          <div className="settings-logout-box">
+            <div className="settings-logout-info">
+              <LogOut size={18} className="settings-logout-icon" />
+              <span>{isAssamese ? "আপোনাৰ একাউণ্টৰ পৰা সুৰক্ষিতভাৱে ওলাই যাওক" : "Safely end your session and log out of CivicSense"}</span>
+            </div>
+            <button type="button" className="settings-logout-btn" onClick={onSignOut}>
+              <LogOut size={16} />
+              <span>{logOutLabel || (isAssamese ? "লগআউট কৰক" : "Log out")}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ToggleRow({ label, description }: { label: string; description: string }) { const [on, setOn] = useState(true); return <div className="toggle-row"><div><b>{label}</b><span>{description}</span></div><button className={`toggle ${on ? "toggle-on" : ""}`} onClick={() => setOn(!on)}><i /></button></div>; }
