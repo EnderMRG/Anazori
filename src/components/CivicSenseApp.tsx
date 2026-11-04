@@ -369,9 +369,10 @@ export default function CivicSenseApp() {
     setComplaintsCursor(null);
     setHasMoreComplaints(false);
     const controller = new AbortController();
-    const params = new URLSearchParams({ limit: "50", includeEvidence: "true" });
+    const params = new URLSearchParams({ limit: "25", includeEvidence: "true" });
     if (search.trim()) params.set("search", search.trim());
     if (statusFilter !== "All") params.set("status", statusFilter);
+    const debounceMs = search.trim() ? 250 : 0;
     const timer = window.setTimeout(() => {
       fetch(`/api/complaints?${params.toString()}`, { signal: controller.signal })
         .then(async (response) => {
@@ -390,7 +391,7 @@ export default function CivicSenseApp() {
         .finally(() => {
           if (!controller.signal.aborted) setComplaintsLoading(false);
         });
-    }, 250);
+    }, debounceMs);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
@@ -404,7 +405,7 @@ export default function CivicSenseApp() {
     const controller = new AbortController();
     loadMoreController.current = controller;
     try {
-      const params = new URLSearchParams({ limit: "50", cursor: complaintsCursor, includeEvidence: "true" });
+      const params = new URLSearchParams({ limit: "25", cursor: complaintsCursor, includeEvidence: "true" });
       if (search.trim()) params.set("search", search.trim());
       if (statusFilter !== "All") params.set("status", statusFilter);
       const response = await fetch(`/api/complaints?${params.toString()}`, { signal: controller.signal });

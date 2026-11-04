@@ -10,7 +10,7 @@ export async function generateGeminiJson(prompt: string): Promise<Record<string,
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
     }),
-    signal: AbortSignal.timeout(8_000),
+    signal: AbortSignal.timeout(4_000),
   });
   if (!response.ok) throw new Error(`Gemini request failed with ${response.status}`);
 

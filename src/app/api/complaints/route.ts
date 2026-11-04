@@ -57,8 +57,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Report list request limit reached. Please try again later." }, { status: 429 });
   }
   const searchParams = new URL(request.url).searchParams;
-  const requestedLimit = Number(searchParams.get("limit") || 50);
-  const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, Math.floor(requestedLimit))) : 50;
+  const requestedLimit = Number(searchParams.get("limit") || 25);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(50, Math.max(1, Math.floor(requestedLimit))) : 25;
   const cursor = searchParams.get("cursor");
   if (cursor && !/^[a-z0-9]+$/i.test(cursor)) return NextResponse.json({ error: "Invalid page cursor." }, { status: 400 });
   const search = (searchParams.get("search") || "").trim().slice(0, 120);

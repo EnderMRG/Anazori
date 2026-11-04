@@ -13,6 +13,9 @@ export type IssueAnalysis = {
   justification: string;
   confidence: number;
   imageAssessment: string;
+  followUpNeeded?: boolean;
+  followUpQuestionEn?: string;
+  followUpQuestionAs?: string;
 };
 
 type AnalysisInput = { title: string; description: string; location: string; image?: string };
@@ -83,36 +86,66 @@ export function analyseIssue({ title, description, location, image }: AnalysisIn
   const report = title.trim() || description.trim() || "Campus issue";
   const summaryEn = `${report} was reported at ${location || "the campus"}. The campus team will review this issue${image ? " with the attached evidence" : ""}.`;
   const summaryAs = `${location || "কেম্পাছ"} স্থানত এই সমস্যাটোৰ অভিযোগ দাখিল কৰা হৈছে। কেম্পাছৰ সংশ্লিষ্ট দলে ইয়াক পৰ্যালোচনা কৰিব${image ? " আৰু সংলগ্ন ছবিখন পৰীক্ষা কৰিব" : ""}।`;
-  return { category, department, priority, language, tags, summaryEn, summaryAs, justification: `Matched ${category.toLowerCase()} signals and routed to ${department}.`, confidence: rule ? 0.86 : 0.48, imageAssessment: image ? "Image attached for staff review." : "No image attached." };
+  const followUpNeeded = description.length < 120;
+  return {
+    category,
+    department,
+    priority,
+    language,
+    tags,
+    summaryEn,
+    summaryAs,
+    justification: `Matched ${category.toLowerCase()} signals and routed to ${department}.`,
+    confidence: rule ? 0.86 : 0.48,
+    imageAssessment: image ? "Image attached for staff review." : "No image attached.",
+    followUpNeeded,
+    followUpQuestionEn: followUpNeeded ? "When did you first notice this issue, and what is affected?" : "",
+    followUpQuestionAs: followUpNeeded ? "এই সমস্যাটো আপুনি প্ৰথম কেতিয়া লক্ষ্য কৰিছিল, আৰু ইয়াৰ ফলত কি প্ৰভাৱিত হৈছে?" : "",
+  };
 }
 
 export async function improveBilingualSummaries(input: AnalysisInput, analysis: IssueAnalysis): Promise<IssueAnalysis> {
+  // If we already have concrete summaries (e.g. from Gemini or template), return immediately without waiting on external translation
+  if (analysis.summaryEn && analysis.summaryAs && !analysis.summaryEn.includes("was reported at the campus")) {
+    return analysis;
+  }
   const description = input.description.trim();
   const source = (description || input.title.trim()).replace(/\s+/g, " ").slice(0, 1900);
   const containsAssamese = /[\u0980-\u09ff]/u.test(source);
-  const translatedSource = containsAssamese ? await translateText(source, "as", "en") : source;
-  const reportEn = (translatedSource || source).replace(/\s+/g, " ").trim();
-  const summaryEn = `${reportEn} Reported at ${input.location || "the campus"}. The campus team will review this issue.`.slice(0, 500);
-  const summaryAs = await translateText(summaryEn, "en", "as");
-  return { ...analysis, summaryEn, summaryAs: summaryAs || analysis.summaryAs };
+  try {
+    const translatedSource = containsAssamese ? await translateText(source, "as", "en") : source;
+    const reportEn = (translatedSource || source).replace(/\s+/g, " ").trim();
+    const summaryEn = `${reportEn} Reported at ${input.location || "the campus"}. The campus team will review this issue.`.slice(0, 500);
+    const summaryAs = await translateText(summaryEn, "en", "as");
+    return { ...analysis, summaryEn, summaryAs: summaryAs || analysis.summaryAs };
+  } catch {
+    return analysis;
+  }
 }
 
 export async function analyseIssueWithProvider(input: AnalysisInput, fallback = analyseIssue(input)) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return { result: fallback, provider: "local" };
   const model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-  const parts: Array<Record<string, unknown>> = [{ text: `Analyse this campus grievance or student service request. It may concern physical campus conditions, administration, examinations, fees, library services, scholarships, or student welfare. Return only JSON with category, department, priority (Critical|High|Medium|Low), language (en|as|mixed), tags (2-4 hashtag strings), summaryEn, summaryAs, justification, confidence (0-1), and imageAssessment. Preserve concrete details from the report in both summaries. If an image is attached, describe only visible details and state whether it appears relevant to the report with full, complete sentences. If no image is attached, imageAssessment should be "No image attached." Do not invent facts.\nTitle: ${input.title}\nDescription: ${input.description}\nLocation: ${input.location}` }];
+  const parts: Array<Record<string, unknown>> = [{ text: `Analyse this campus grievance or student service request. It may concern physical campus conditions, administration, examinations, fees, library services, scholarships, or student welfare. Return only JSON with category, department, priority (Critical|High|Medium|Low), language (en|as|mixed), tags (2-4 hashtag strings), summaryEn, summaryAs, justification, confidence (0-1), imageAssessment, and whether follow-up clarification is needed: followUpNeeded (boolean: true only if essential detail like timing, specific location room, or safety hazard is missing; false if report is already actionable), followUpQuestionEn (concise single question if needed, else empty string), followUpQuestionAs (same question in natural Assamese script if needed, else empty string). Preserve concrete details from the report in both summaries. If an image is attached, describe only visible details and state whether it appears relevant to the report with full, complete sentences. If no image is attached, imageAssessment should be "No image attached." Do not invent facts.\nTitle: ${input.title}\nDescription: ${input.description}\nLocation: ${input.location}` }];
   if (input.image?.startsWith("data:")) {
     const match = input.image.match(/^data:([^;]+);base64,(.+)$/);
     if (match && Buffer.byteLength(match[2], "base64") <= 3 * 1024 * 1024) parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
   }
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }), signal: AbortSignal.timeout(8_000) });
+  // Fast 4.5s timeout prevents hanging on slow network or model stalls
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } }),
+    signal: AbortSignal.timeout(4_500),
+  });
   if (!response.ok) throw new Error(`Gemini request failed with ${response.status}`);
   const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
   const raw = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
   const value = JSON.parse(raw) as Record<string, unknown>;
   const priority = ["Critical", "High", "Medium", "Low"].includes(String(value.priority)) ? String(value.priority) as IssuePriority : fallback.priority;
   const language = ["en", "as", "mixed"].includes(String(value.language)) ? String(value.language) as IssueLanguage : fallback.language;
+  const followUpNeeded = Boolean(value.followUpNeeded) && Boolean(typeof value.followUpQuestionEn === "string" && value.followUpQuestionEn.trim());
   const result = {
     ...fallback,
     category: typeof value.category === "string" && value.category.trim() ? value.category.trim().slice(0, 80) : fallback.category,
@@ -125,6 +158,9 @@ export async function analyseIssueWithProvider(input: AnalysisInput, fallback = 
     justification: typeof value.justification === "string" && value.justification.trim() ? value.justification.trim().slice(0, 1500) : fallback.justification,
     confidence: typeof value.confidence === "number" ? Math.max(0, Math.min(1, value.confidence)) : fallback.confidence,
     imageAssessment: typeof value.imageAssessment === "string" && value.imageAssessment.trim() ? value.imageAssessment.trim().slice(0, 3000) : fallback.imageAssessment,
+    followUpNeeded,
+    followUpQuestionEn: followUpNeeded && typeof value.followUpQuestionEn === "string" ? value.followUpQuestionEn.trim().slice(0, 300) : fallback.followUpQuestionEn || "",
+    followUpQuestionAs: followUpNeeded && typeof value.followUpQuestionAs === "string" ? value.followUpQuestionAs.trim().slice(0, 300) : fallback.followUpQuestionAs || "",
   };
   return { provider: "gemini", result };
 }

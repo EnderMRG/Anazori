@@ -26,11 +26,8 @@ export async function translateText(text: string, from: TranslationLanguage, to:
   const endpoint = process.env.TRANSLATION_API_URL || "https://api.dharun.dev/v1/translate";
   const params = new URLSearchParams({ from, to, text: source.slice(0, 1900) });
   try {
-    const response = await fetch(`${endpoint}?${params.toString()}`, { signal: AbortSignal.timeout(8_000) });
-    if (!response.ok) {
-      console.error(`Translation provider returned status ${response.status}.`);
-      return null;
-    }
+    const response = await fetch(`${endpoint}?${params.toString()}`, { signal: AbortSignal.timeout(1_800) });
+    if (!response.ok) return null;
     const payload = await response.json() as { data?: { translation?: string } };
     const translation = payload.data?.translation?.trim();
     if (!translation || translation.includes("�")) return null;
